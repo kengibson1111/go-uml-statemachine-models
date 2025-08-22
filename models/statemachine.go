@@ -67,6 +67,9 @@ func (sm *StateMachine) ValidateWithErrors(context *ValidationContext, errors *V
 	sm.validateConnectionPoints(context, errors)
 	sm.validateRegionMultiplicity(context, errors)
 	sm.validateMethodConstraints(context, errors)
+
+	// Structural integrity validation
+	sm.validateStructuralIntegrity(context, errors)
 }
 
 // Region represents a region within a state machine
@@ -133,6 +136,9 @@ func (r *Region) ValidateWithErrors(context *ValidationContext, errors *Validati
 	r.validateInitialStates(context, errors)
 	r.validateVertexContainment(context, errors)
 	r.validateTransitionScope(context, errors)
+
+	// Structural integrity validation
+	r.validateStructuralIntegrity(context, errors)
 }
 
 // validateConnectionPoints ensures connection points are entry/exit pseudostates
@@ -441,4 +447,292 @@ func (r *Region) isInitialPseudostate(vertex *Vertex) bool {
 	}
 
 	return false
+}
+
+// validateStructuralIntegrity performs structural integrity validation for StateMachine
+func (sm *StateMachine) validateStructuralIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	// Create a reference validator for this state machine
+	refValidator := NewReferenceValidator()
+
+	// Validate references within this state machine
+	if err := refValidator.ValidateReferencesInContext(sm, context); err != nil {
+		// Extract errors from the reference validator and add them to our error collection
+		if refErrors, ok := err.(*ValidationErrors); ok {
+			for _, refError := range refErrors.Errors {
+				errors.Add(refError)
+			}
+		} else {
+			// Single error case
+			errors.AddError(
+				ErrorTypeReference,
+				"StateMachine",
+				"StructuralIntegrity",
+				err.Error(),
+				context.Path,
+			)
+		}
+	}
+
+	// Additional state machine specific structural validations
+	sm.validateRegionConsistency(context, errors)
+	sm.validateConnectionPointConsistency(context, errors)
+}
+
+// validateRegionConsistency validates consistency between regions
+func (sm *StateMachine) validateRegionConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Check for duplicate region IDs
+	regionIDs := make(map[string]int)
+	for i, region := range sm.Regions {
+		if region == nil {
+			continue
+		}
+
+		if prevIndex, exists := regionIDs[region.ID]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"StateMachine",
+				"Regions",
+				fmt.Sprintf("duplicate region ID '%s' found at indices %d and %d (structural integrity violation)", region.ID, prevIndex, i),
+				context.WithPathIndex("Regions", i).Path,
+			)
+		} else {
+			regionIDs[region.ID] = i
+		}
+	}
+
+	// Validate region names are unique (best practice)
+	regionNames := make(map[string]int)
+	for i, region := range sm.Regions {
+		if region == nil || region.Name == "" {
+			continue
+		}
+
+		if prevIndex, exists := regionNames[region.Name]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"StateMachine",
+				"Regions",
+				fmt.Sprintf("duplicate region name '%s' found at indices %d and %d (may cause confusion)", region.Name, prevIndex, i),
+				context.WithPathIndex("Regions", i).Path,
+			)
+		} else {
+			regionNames[region.Name] = i
+		}
+	}
+}
+
+// validateConnectionPointConsistency validates consistency of connection points
+func (sm *StateMachine) validateConnectionPointConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Check for duplicate connection point IDs
+	cpIDs := make(map[string]int)
+	for i, cp := range sm.ConnectionPoints {
+		if cp == nil {
+			continue
+		}
+
+		if prevIndex, exists := cpIDs[cp.ID]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"StateMachine",
+				"ConnectionPoints",
+				fmt.Sprintf("duplicate connection point ID '%s' found at indices %d and %d (structural integrity violation)", cp.ID, prevIndex, i),
+				context.WithPathIndex("ConnectionPoints", i).Path,
+			)
+		} else {
+			cpIDs[cp.ID] = i
+		}
+	}
+
+	// Validate connection point names are unique within their kind
+	entryNames := make(map[string]int)
+	exitNames := make(map[string]int)
+
+	for i, cp := range sm.ConnectionPoints {
+		if cp == nil || cp.Name == "" {
+			continue
+		}
+
+		switch cp.Kind {
+		case PseudostateKindEntryPoint:
+			if prevIndex, exists := entryNames[cp.Name]; exists {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"StateMachine",
+					"ConnectionPoints",
+					fmt.Sprintf("duplicate entry point name '%s' found at indices %d and %d (may cause confusion)", cp.Name, prevIndex, i),
+					context.WithPathIndex("ConnectionPoints", i).Path,
+				)
+			} else {
+				entryNames[cp.Name] = i
+			}
+		case PseudostateKindExitPoint:
+			if prevIndex, exists := exitNames[cp.Name]; exists {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"StateMachine",
+					"ConnectionPoints",
+					fmt.Sprintf("duplicate exit point name '%s' found at indices %d and %d (may cause confusion)", cp.Name, prevIndex, i),
+					context.WithPathIndex("ConnectionPoints", i).Path,
+				)
+			} else {
+				exitNames[cp.Name] = i
+			}
+		}
+	}
+}
+
+// validateStructuralIntegrity performs structural integrity validation for Region
+func (r *Region) validateStructuralIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	// Validate vertex ID consistency between states and vertices collections
+	r.validateVertexIDConsistency(context, errors)
+
+	// Validate transition reference consistency
+	r.validateTransitionReferenceConsistency(context, errors)
+
+	// Validate containment relationships
+	r.validateContainmentRelationships(context, errors)
+}
+
+// validateVertexIDConsistency validates that vertex IDs are consistent across collections
+func (r *Region) validateVertexIDConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Check for duplicate vertex IDs within the region
+	vertexIDs := make(map[string]string) // ID -> collection type
+
+	// Check vertices collection
+	for i, vertex := range r.Vertices {
+		if vertex == nil {
+			continue
+		}
+
+		if collectionType, exists := vertexIDs[vertex.ID]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Region",
+				"Vertices",
+				fmt.Sprintf("duplicate vertex ID '%s' found in %s collection and vertices collection at index %d (structural integrity violation)", vertex.ID, collectionType, i),
+				context.WithPathIndex("Vertices", i).Path,
+			)
+		} else {
+			vertexIDs[vertex.ID] = "vertices"
+		}
+	}
+
+	// Check states collection
+	for i, state := range r.States {
+		if state == nil {
+			continue
+		}
+
+		if collectionType, exists := vertexIDs[state.ID]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Region",
+				"States",
+				fmt.Sprintf("duplicate vertex ID '%s' found in %s collection and states collection at index %d (structural integrity violation)", state.ID, collectionType, i),
+				context.WithPathIndex("States", i).Path,
+			)
+		} else {
+			vertexIDs[state.ID] = "states"
+		}
+	}
+}
+
+// validateTransitionReferenceConsistency validates that transitions reference valid vertices
+func (r *Region) validateTransitionReferenceConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Build a map of all available vertices in this region
+	availableVertices := make(map[string]bool)
+
+	for _, vertex := range r.Vertices {
+		if vertex != nil {
+			availableVertices[vertex.ID] = true
+		}
+	}
+
+	for _, state := range r.States {
+		if state != nil {
+			availableVertices[state.ID] = true
+		}
+	}
+
+	// Validate each transition's source and target references
+	for i, transition := range r.Transitions {
+		if transition == nil {
+			continue
+		}
+
+		transitionContext := context.WithPathIndex("Transitions", i)
+
+		// Check source reference
+		if transition.Source != nil {
+			if !availableVertices[transition.Source.ID] {
+				// For internal and local transitions, source must be in this region
+				if transition.Kind == TransitionKindInternal || transition.Kind == TransitionKindLocal {
+					errors.AddError(
+						ErrorTypeReference,
+						"Region",
+						"Transitions",
+						fmt.Sprintf("transition at index %d references source vertex '%s' that is not available in this region (structural integrity violation)", i, transition.Source.ID),
+						transitionContext.Path,
+					)
+				}
+			}
+		}
+
+		// Check target reference
+		if transition.Target != nil {
+			if !availableVertices[transition.Target.ID] {
+				// For internal and local transitions, target must be in this region
+				if transition.Kind == TransitionKindInternal || transition.Kind == TransitionKindLocal {
+					errors.AddError(
+						ErrorTypeReference,
+						"Region",
+						"Transitions",
+						fmt.Sprintf("transition at index %d references target vertex '%s' that is not available in this region (structural integrity violation)", i, transition.Target.ID),
+						transitionContext.Path,
+					)
+				}
+			}
+		}
+	}
+}
+
+// validateContainmentRelationships validates containment relationships within the region
+func (r *Region) validateContainmentRelationships(context *ValidationContext, errors *ValidationErrors) {
+	// Validate that composite states properly contain their regions
+	for i, state := range r.States {
+		if state == nil || !state.IsComposite {
+			continue
+		}
+
+		stateContext := context.WithPathIndex("States", i)
+
+		// Check that composite state regions don't conflict with this region's vertices
+		for j, subRegion := range state.Regions {
+			if subRegion == nil {
+				continue
+			}
+
+			subRegionContext := stateContext.WithPathIndex("Regions", j)
+
+			// Validate that sub-region vertices don't have ID conflicts with parent region
+			for k, subVertex := range subRegion.Vertices {
+				if subVertex == nil {
+					continue
+				}
+
+				// Check if this vertex ID exists in the parent region
+				for _, parentVertex := range r.Vertices {
+					if parentVertex != nil && parentVertex.ID == subVertex.ID {
+						errors.AddError(
+							ErrorTypeConstraint,
+							"Region",
+							"ContainmentRelationships",
+							fmt.Sprintf("composite state region contains vertex with ID '%s' that conflicts with parent region vertex (structural integrity violation)", subVertex.ID),
+							subRegionContext.WithPathIndex("Vertices", k).Path,
+						)
+					}
+				}
+			}
+		}
+	}
 }

@@ -93,6 +93,9 @@ func (t *Transition) ValidateWithErrors(context *ValidationContext, errors *Vali
 	t.validateSourceTarget(context, errors)
 	t.validateKindConstraints(context, errors)
 	t.validateContainment(context, errors)
+
+	// Structural integrity validation
+	t.validateStructuralIntegrity(context, errors)
 }
 
 // validateSourceTarget ensures source/target compatibility
@@ -591,4 +594,289 @@ func (t *Transition) isConnectionPoint(vertex *Vertex) bool {
 	}
 
 	return false
+}
+
+// validateStructuralIntegrity performs structural integrity validation for Transition
+func (t *Transition) validateStructuralIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	// Validate reference consistency
+	t.validateReferenceConsistency(context, errors)
+
+	// Validate transition graph consistency
+	t.validateTransitionGraphConsistency(context, errors)
+
+	// Validate behavioral consistency
+	t.validateBehavioralConsistency(context, errors)
+}
+
+// validateReferenceConsistency validates that transition references are consistent
+func (t *Transition) validateReferenceConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Validate source and target are not the same object instance for non-internal transitions
+	if t.Source != nil && t.Target != nil && t.Kind != TransitionKindInternal {
+		// For external and local transitions, check if source and target are the same instance
+		// This could indicate a reference integrity issue
+		if t.Source == t.Target {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"ReferenceConsistency",
+				fmt.Sprintf("%s transition has source and target pointing to the same object instance, which may indicate a reference integrity issue", t.Kind),
+				context.Path,
+			)
+		}
+	}
+
+	// Validate that source and target have consistent types
+	if t.Source != nil && t.Target != nil {
+		// Both should be valid vertex types
+		validTypes := map[string]bool{
+			"state":       true,
+			"pseudostate": true,
+			"finalstate":  true,
+		}
+
+		if !validTypes[t.Source.Type] {
+			errors.AddError(
+				ErrorTypeReference,
+				"Transition",
+				"Source",
+				fmt.Sprintf("source vertex has invalid type '%s' for transition reference", t.Source.Type),
+				context.WithPath("Source").Path,
+			)
+		}
+
+		if !validTypes[t.Target.Type] {
+			errors.AddError(
+				ErrorTypeReference,
+				"Transition",
+				"Target",
+				fmt.Sprintf("target vertex has invalid type '%s' for transition reference", t.Target.Type),
+				context.WithPath("Target").Path,
+			)
+		}
+	}
+}
+
+// validateTransitionGraphConsistency validates transition consistency within the state machine graph
+func (t *Transition) validateTransitionGraphConsistency(context *ValidationContext, errors *ValidationErrors) {
+	if t.Source == nil || t.Target == nil {
+		// Already validated by required field validation
+		return
+	}
+
+	// Validate transition creates a valid state machine graph
+	// Check for potential graph issues based on vertex types and transition kind
+
+	// Initial pseudostates should only have outgoing transitions
+	if t.isInitialPseudostate(t.Source) {
+		// This is valid - initial pseudostates can have outgoing transitions
+	}
+
+	if t.isInitialPseudostate(t.Target) {
+		// Initial pseudostates should not be targets (except for external transitions from other regions)
+		if t.Kind != TransitionKindExternal {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"GraphConsistency",
+				"initial pseudostate should not be the target of internal or local transitions (UML graph constraint)",
+				context.Path,
+			)
+		}
+	}
+
+	// Final states should not have outgoing transitions
+	if t.Source.Type == "finalstate" {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"Transition",
+			"GraphConsistency",
+			"final state cannot have outgoing transitions (UML graph constraint)",
+			context.Path,
+		)
+	}
+
+	// Terminate pseudostates should not have outgoing transitions
+	if t.isTerminatePseudostate(t.Source) {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"Transition",
+			"GraphConsistency",
+			"terminate pseudostate cannot have outgoing transitions (UML graph constraint)",
+			context.Path,
+		)
+	}
+
+	// Validate transition kind consistency with vertex types
+	t.validateKindVertexConsistency(context, errors)
+}
+
+// validateKindVertexConsistency validates that transition kind is consistent with vertex types
+func (t *Transition) validateKindVertexConsistency(context *ValidationContext, errors *ValidationErrors) {
+	if t.Source == nil || t.Target == nil {
+		return
+	}
+
+	// Internal transitions should have compatible source and target
+	if t.Kind == TransitionKindInternal {
+		// Internal transitions must have the same source and target
+		if t.Source.ID != t.Target.ID {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"KindConsistency",
+				"internal transition must have the same source and target vertex (UML constraint)",
+				context.Path,
+			)
+		}
+
+		// Internal transitions should typically be on states, not pseudostates
+		if t.Source.Type != "state" {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"KindConsistency",
+				"internal transition should typically have a state as source, not a pseudostate (UML best practice)",
+				context.Path,
+			)
+		}
+	}
+
+	// Local transitions should be within the same composite state
+	if t.Kind == TransitionKindLocal {
+		// This requires more context about the state hierarchy to validate properly
+		// For now, we validate that neither source nor target are connection points
+		if t.isConnectionPoint(t.Source) {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"KindConsistency",
+				"local transition should not originate from connection points (UML constraint)",
+				context.Path,
+			)
+		}
+
+		if t.isConnectionPoint(t.Target) {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"KindConsistency",
+				"local transition should not target connection points (UML constraint)",
+				context.Path,
+			)
+		}
+	}
+
+	// External transitions can cross boundaries and use connection points
+	// No additional constraints for external transitions
+}
+
+// validateBehavioralConsistency validates behavioral aspects of the transition
+func (t *Transition) validateBehavioralConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Validate trigger consistency
+	t.validateTriggerConsistency(context, errors)
+
+	// Validate guard and effect consistency
+	t.validateGuardEffectConsistency(context, errors)
+}
+
+// validateTriggerConsistency validates that triggers are consistent
+func (t *Transition) validateTriggerConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Check for duplicate triggers
+	triggerNames := make(map[string]int)
+	triggerEvents := make(map[string]int)
+
+	for i, trigger := range t.Triggers {
+		if trigger == nil {
+			continue
+		}
+
+		triggerContext := context.WithPathIndex("Triggers", i)
+
+		// Check for duplicate trigger names
+		if trigger.Name != "" {
+			if prevIndex, exists := triggerNames[trigger.Name]; exists {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"Transition",
+					"Triggers",
+					fmt.Sprintf("duplicate trigger name '%s' found at indices %d and %d (may cause confusion)", trigger.Name, prevIndex, i),
+					triggerContext.Path,
+				)
+			} else {
+				triggerNames[trigger.Name] = i
+			}
+		}
+
+		// Check for duplicate event references
+		if trigger.Event != nil && trigger.Event.ID != "" {
+			if prevIndex, exists := triggerEvents[trigger.Event.ID]; exists {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"Transition",
+					"Triggers",
+					fmt.Sprintf("duplicate event reference '%s' found at indices %d and %d (may cause ambiguity)", trigger.Event.ID, prevIndex, i),
+					triggerContext.Path,
+				)
+			} else {
+				triggerEvents[trigger.Event.ID] = i
+			}
+		}
+	}
+}
+
+// validateGuardEffectConsistency validates guard and effect consistency
+func (t *Transition) validateGuardEffectConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Validate guard consistency
+	if t.Guard != nil {
+		guardContext := context.WithPath("Guard")
+
+		// Guard should have meaningful specification
+		if t.Guard.Specification == "" {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"Guard",
+				"guard constraint should have a meaningful specification (UML best practice)",
+				guardContext.Path,
+			)
+		}
+
+		// Guard language should be consistent with effect language if both are specified
+		if t.Effect != nil && t.Guard.Language != "" && t.Effect.Language != "" && t.Guard.Language != t.Effect.Language {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"GuardEffectConsistency",
+				fmt.Sprintf("guard uses language '%s' while effect uses '%s', consider consistency (UML best practice)", t.Guard.Language, t.Effect.Language),
+				context.Path,
+			)
+		}
+	}
+
+	// Validate effect consistency
+	if t.Effect != nil {
+		effectContext := context.WithPath("Effect")
+
+		// Effect should have meaningful specification
+		if t.Effect.Specification == "" {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Transition",
+				"Effect",
+				"effect behavior should have a meaningful specification (UML best practice)",
+				effectContext.Path,
+			)
+		}
+	}
+
+	// Validate that guard and effect don't have conflicting IDs
+	if t.Guard != nil && t.Effect != nil && t.Guard.ID == t.Effect.ID {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"Transition",
+			"GuardEffectConsistency",
+			"guard and effect have the same ID, which may cause confusion (UML best practice)",
+			context.Path,
+		)
+	}
 }

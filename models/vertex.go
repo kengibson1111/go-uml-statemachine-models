@@ -47,6 +47,9 @@ func (v *Vertex) ValidateWithErrors(context *ValidationContext, errors *Validati
 	// Validate type is one of the allowed values
 	validTypes := []string{"state", "pseudostate", "finalstate"}
 	helper.ValidateEnum(v.Type, "Type", "Vertex", validTypes, context, errors)
+
+	// Enhanced validation for vertex-specific constraints
+	v.validateVertexConstraints(context, errors)
 }
 
 // State represents a state in a state machine
@@ -132,6 +135,9 @@ func (s *State) ValidateWithErrors(context *ValidationContext, errors *Validatio
 	s.validateCompositeConstraints(context, errors)
 	s.validateSubmachineConstraints(context, errors)
 	s.validateBehaviorConsistency(context, errors)
+
+	// Enhanced structural integrity validation
+	s.validateStateStructuralIntegrity(context, errors)
 }
 
 // PseudostateKind represents the kind of pseudostate
@@ -225,6 +231,9 @@ func (ps *Pseudostate) ValidateWithErrors(context *ValidationContext, errors *Va
 	// UML constraint validations
 	ps.validateKindConstraints(context, errors)
 	ps.validateMultiplicity(context, errors)
+
+	// Enhanced structural integrity validation
+	ps.validatePseudostateStructuralIntegrity(context, errors)
 }
 
 // FinalState represents a final state in a state machine
@@ -269,6 +278,9 @@ func (fs *FinalState) ValidateWithErrors(context *ValidationContext, errors *Val
 			context.Path,
 		)
 	}
+
+	// Enhanced structural integrity validation
+	fs.validateFinalStateStructuralIntegrity(context, errors)
 }
 
 // ConnectionPointReference represents a connection point reference
@@ -1150,5 +1162,736 @@ func (s *State) validateBehaviorSemantics(context *ValidationContext, errors *Va
 				context.Path,
 			)
 		}
+	}
+}
+
+// validateVertexConstraints performs enhanced validation for vertex-specific constraints
+func (v *Vertex) validateVertexConstraints(context *ValidationContext, errors *ValidationErrors) {
+	// Validate vertex naming conventions
+	v.validateNamingConventions(context, errors)
+
+	// Validate vertex type consistency
+	v.validateTypeConsistency(context, errors)
+}
+
+// validateNamingConventions validates vertex naming conventions
+func (v *Vertex) validateNamingConventions(context *ValidationContext, errors *ValidationErrors) {
+	// Validate ID format (should not contain spaces or special characters that could cause issues)
+	if v.ID != "" {
+		// Check for potentially problematic characters in ID
+		problematicChars := []string{" ", "\t", "\n", "\r", ".", "/", "\\", ":", ";", ",", "\"", "'"}
+		for _, char := range problematicChars {
+			if strings.Contains(v.ID, char) {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"Vertex",
+					"ID",
+					fmt.Sprintf("vertex ID contains potentially problematic character '%s' which may cause issues (best practice)", char),
+					context.Path,
+				)
+				break
+			}
+		}
+	}
+
+	// Validate name is meaningful for the vertex type
+	if v.Name != "" && v.Type != "" {
+		// Check if name suggests a different type than what's specified
+		nameUpper := strings.ToUpper(v.Name)
+
+		switch v.Type {
+		case "state":
+			// State names suggesting pseudostate functionality
+			pseudostateKeywords := []string{"INITIAL", "FINAL", "CHOICE", "JUNCTION", "FORK", "JOIN", "ENTRY", "EXIT", "TERMINATE"}
+			for _, keyword := range pseudostateKeywords {
+				if strings.Contains(nameUpper, keyword) {
+					errors.AddError(
+						ErrorTypeConstraint,
+						"Vertex",
+						"Name",
+						fmt.Sprintf("state name '%s' suggests pseudostate functionality but vertex type is 'state' (may cause confusion)", v.Name),
+						context.Path,
+					)
+					break
+				}
+			}
+		case "pseudostate":
+			// Pseudostate names suggesting regular state functionality
+			stateKeywords := []string{"ACTIVE", "INACTIVE", "RUNNING", "STOPPED", "WAITING", "PROCESSING"}
+			for _, keyword := range stateKeywords {
+				if strings.Contains(nameUpper, keyword) {
+					errors.AddError(
+						ErrorTypeConstraint,
+						"Vertex",
+						"Name",
+						fmt.Sprintf("pseudostate name '%s' suggests regular state functionality but vertex type is 'pseudostate' (may cause confusion)", v.Name),
+						context.Path,
+					)
+					break
+				}
+			}
+		case "finalstate":
+			// Final state names should suggest completion
+			if !strings.Contains(nameUpper, "FINAL") && !strings.Contains(nameUpper, "END") && !strings.Contains(nameUpper, "COMPLETE") && !strings.Contains(nameUpper, "DONE") {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"Vertex",
+					"Name",
+					fmt.Sprintf("final state name '%s' should suggest completion or finality (UML best practice)", v.Name),
+					context.Path,
+				)
+			}
+		}
+	}
+}
+
+// validateTypeConsistency validates vertex type consistency
+func (v *Vertex) validateTypeConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Validate type is not empty and is one of the valid types
+	if v.Type == "" {
+		// Already handled by required field validation
+		return
+	}
+
+	// Additional type-specific validations
+	switch v.Type {
+	case "state":
+		// States should have meaningful names
+		if v.Name == "" {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Vertex",
+				"Name",
+				"state vertices should have meaningful names (UML best practice)",
+				context.Path,
+			)
+		}
+	case "pseudostate":
+		// Pseudostates should have names that indicate their purpose
+		if v.Name == "" {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Vertex",
+				"Name",
+				"pseudostate vertices should have names that indicate their purpose (UML best practice)",
+				context.Path,
+			)
+		}
+	case "finalstate":
+		// Final states should have names that indicate completion
+		if v.Name == "" {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Vertex",
+				"Name",
+				"final state vertices should have names that indicate completion (UML best practice)",
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateStateStructuralIntegrity performs enhanced structural integrity validation for State
+func (s *State) validateStateStructuralIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	// Validate state flag consistency
+	s.validateStateFlagConsistency(context, errors)
+
+	// Validate region hierarchy consistency
+	s.validateRegionHierarchyConsistency(context, errors)
+
+	// Validate submachine reference integrity
+	s.validateSubmachineReferenceIntegrity(context, errors)
+
+	// Validate connection point reference integrity
+	s.validateConnectionPointReferenceIntegrity(context, errors)
+}
+
+// validateStateFlagConsistency validates consistency between state flags
+func (s *State) validateStateFlagConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Validate mutually exclusive flags
+	flagCount := 0
+	if s.IsComposite {
+		flagCount++
+	}
+	if s.IsSimple {
+		flagCount++
+	}
+	if s.IsSubmachineState {
+		flagCount++
+	}
+
+	if flagCount > 1 {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"State",
+			"StateFlags",
+			"state cannot be simultaneously composite, simple, and submachine state (mutually exclusive flags)",
+			context.Path,
+		)
+	}
+
+	// If no flags are set, assume it's a simple state
+	if flagCount == 0 {
+		// This is acceptable - default to simple state
+	}
+
+	// Validate orthogonal flag consistency
+	if s.IsOrthogonal && !s.IsComposite {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"State",
+			"IsOrthogonal",
+			"state cannot be orthogonal without being composite (UML constraint)",
+			context.Path,
+		)
+	}
+}
+
+// validateRegionHierarchyConsistency validates region hierarchy consistency
+func (s *State) validateRegionHierarchyConsistency(context *ValidationContext, errors *ValidationErrors) {
+	if !s.IsComposite {
+		return
+	}
+
+	// Check for duplicate region IDs within this state
+	regionIDs := make(map[string]int)
+	for i, region := range s.Regions {
+		if region == nil {
+			continue
+		}
+
+		if prevIndex, exists := regionIDs[region.ID]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"State",
+				"Regions",
+				fmt.Sprintf("duplicate region ID '%s' found at indices %d and %d within composite state (structural integrity violation)", region.ID, prevIndex, i),
+				context.WithPathIndex("Regions", i).Path,
+			)
+		} else {
+			regionIDs[region.ID] = i
+		}
+	}
+
+	// Validate region names are unique within this state
+	regionNames := make(map[string]int)
+	for i, region := range s.Regions {
+		if region == nil || region.Name == "" {
+			continue
+		}
+
+		if prevIndex, exists := regionNames[region.Name]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"State",
+				"Regions",
+				fmt.Sprintf("duplicate region name '%s' found at indices %d and %d within composite state (may cause confusion)", region.Name, prevIndex, i),
+				context.WithPathIndex("Regions", i).Path,
+			)
+		} else {
+			regionNames[region.Name] = i
+		}
+	}
+
+	// Validate orthogonal regions don't have conflicting initial states
+	if s.IsOrthogonal && len(s.Regions) > 1 {
+		s.validateOrthogonalRegionConsistency(context, errors)
+	}
+}
+
+// validateOrthogonalRegionConsistency validates consistency between orthogonal regions
+func (s *State) validateOrthogonalRegionConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Each orthogonal region should have its own initial state
+	regionsWithoutInitial := 0
+
+	for i, region := range s.Regions {
+		if region == nil {
+			continue
+		}
+
+		regionContext := context.WithPathIndex("Regions", i)
+		hasInitial := false
+
+		// Check if region has an initial pseudostate
+		for _, vertex := range region.Vertices {
+			if vertex != nil && vertex.Type == "pseudostate" && s.isInitialPseudostateVertex(vertex) {
+				hasInitial = true
+				break
+			}
+		}
+
+		if !hasInitial {
+			regionsWithoutInitial++
+			errors.AddError(
+				ErrorTypeConstraint,
+				"State",
+				"OrthogonalRegions",
+				fmt.Sprintf("orthogonal region at index %d should have an initial pseudostate (UML best practice)", i),
+				regionContext.Path,
+			)
+		}
+	}
+}
+
+// validateSubmachineReferenceIntegrity validates submachine reference integrity
+func (s *State) validateSubmachineReferenceIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	if !s.IsSubmachineState || s.Submachine == nil {
+		return
+	}
+
+	submachineContext := context.WithPath("Submachine")
+
+	// Validate submachine is not the same as the containing state machine
+	if context.StateMachine != nil && s.Submachine.ID == context.StateMachine.ID {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"State",
+			"Submachine",
+			"submachine state cannot reference the same state machine that contains it (circular reference)",
+			submachineContext.Path,
+		)
+	}
+
+	// Validate submachine has compatible connection points with this state's connections
+	s.validateSubmachineConnectionPointCompatibility(context, errors)
+}
+
+// validateSubmachineConnectionPointCompatibility validates connection point compatibility
+func (s *State) validateSubmachineConnectionPointCompatibility(context *ValidationContext, errors *ValidationErrors) {
+	if s.Submachine == nil {
+		return
+	}
+
+	// Build maps of available connection points in the submachine
+	submachineEntryPoints := make(map[string]*Pseudostate)
+	submachineExitPoints := make(map[string]*Pseudostate)
+
+	for _, cp := range s.Submachine.ConnectionPoints {
+		if cp == nil {
+			continue
+		}
+
+		switch cp.Kind {
+		case PseudostateKindEntryPoint:
+			submachineEntryPoints[cp.ID] = cp
+		case PseudostateKindExitPoint:
+			submachineExitPoints[cp.ID] = cp
+		}
+	}
+
+	// Validate connection point references
+	for i, conn := range s.Connections {
+		if conn == nil {
+			continue
+		}
+
+		connContext := context.WithPathIndex("Connections", i)
+
+		// Validate entry point references
+		for j, entry := range conn.Entry {
+			if entry == nil {
+				continue
+			}
+
+			if _, exists := submachineEntryPoints[entry.ID]; !exists {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"State",
+					"Connections",
+					fmt.Sprintf("connection point reference at index %d references entry point '%s' that does not exist in submachine (structural integrity violation)", i, entry.ID),
+					connContext.WithPathIndex("Entry", j).Path,
+				)
+			}
+		}
+
+		// Validate exit point references
+		for j, exit := range conn.Exit {
+			if exit == nil {
+				continue
+			}
+
+			if _, exists := submachineExitPoints[exit.ID]; !exists {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"State",
+					"Connections",
+					fmt.Sprintf("connection point reference at index %d references exit point '%s' that does not exist in submachine (structural integrity violation)", i, exit.ID),
+					connContext.WithPathIndex("Exit", j).Path,
+				)
+			}
+		}
+	}
+}
+
+// validateConnectionPointReferenceIntegrity validates connection point reference integrity
+func (s *State) validateConnectionPointReferenceIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	// Check for duplicate connection point reference IDs
+	connIDs := make(map[string]int)
+	for i, conn := range s.Connections {
+		if conn == nil {
+			continue
+		}
+
+		if prevIndex, exists := connIDs[conn.ID]; exists {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"State",
+				"Connections",
+				fmt.Sprintf("duplicate connection point reference ID '%s' found at indices %d and %d (structural integrity violation)", conn.ID, prevIndex, i),
+				context.WithPathIndex("Connections", i).Path,
+			)
+		} else {
+			connIDs[conn.ID] = i
+		}
+	}
+}
+
+// isInitialPseudostateVertex checks if a vertex represents an initial pseudostate using naming conventions
+func (s *State) isInitialPseudostateVertex(vertex *Vertex) bool {
+	if vertex == nil || vertex.Type != "pseudostate" {
+		return false
+	}
+
+	// Check common naming patterns for initial pseudostates
+	name := vertex.Name
+	id := vertex.ID
+
+	initialPatterns := []string{
+		"initial", "Initial", "INITIAL",
+		"init", "Init", "INIT",
+		"start", "Start", "START",
+	}
+
+	for _, pattern := range initialPatterns {
+		if name == pattern || id == pattern {
+			return true
+		}
+	}
+
+	return false
+}
+
+// validatePseudostateStructuralIntegrity performs enhanced structural integrity validation for Pseudostate
+func (ps *Pseudostate) validatePseudostateStructuralIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	// Validate pseudostate kind-specific structural constraints
+	ps.validateKindSpecificStructuralConstraints(context, errors)
+
+	// Validate pseudostate placement consistency
+	ps.validatePlacementConsistency(context, errors)
+}
+
+// validateKindSpecificStructuralConstraints validates structural constraints specific to pseudostate kinds
+func (ps *Pseudostate) validateKindSpecificStructuralConstraints(context *ValidationContext, errors *ValidationErrors) {
+	switch ps.Kind {
+	case PseudostateKindInitial:
+		ps.validateInitialStructuralConstraints(context, errors)
+	case PseudostateKindDeepHistory, PseudostateKindShallowHistory:
+		ps.validateHistoryStructuralConstraints(context, errors)
+	case PseudostateKindJoin, PseudostateKindFork:
+		ps.validateJoinForkStructuralConstraints(context, errors)
+	case PseudostateKindJunction, PseudostateKindChoice:
+		ps.validateJunctionChoiceStructuralConstraints(context, errors)
+	case PseudostateKindEntryPoint, PseudostateKindExitPoint:
+		ps.validateConnectionPointStructuralConstraints(context, errors)
+	case PseudostateKindTerminate:
+		ps.validateTerminateStructuralConstraints(context, errors)
+	}
+}
+
+// validateInitialStructuralConstraints validates structural constraints for initial pseudostates
+func (ps *Pseudostate) validateInitialStructuralConstraints(context *ValidationContext, errors *ValidationErrors) {
+	// Initial pseudostates should have names that clearly indicate their purpose
+	if ps.Name == "" {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"Pseudostate",
+			"Name",
+			"initial pseudostate should have a name that clearly indicates its purpose (UML best practice)",
+			context.Path,
+		)
+	} else {
+		// Check if name suggests initial purpose
+		nameUpper := strings.ToUpper(ps.Name)
+		initialKeywords := []string{"INITIAL", "INIT", "START", "BEGIN"}
+		hasInitialKeyword := false
+		for _, keyword := range initialKeywords {
+			if strings.Contains(nameUpper, keyword) {
+				hasInitialKeyword = true
+				break
+			}
+		}
+
+		if !hasInitialKeyword {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Pseudostate",
+				"Name",
+				fmt.Sprintf("initial pseudostate name '%s' should suggest initial purpose (UML best practice)", ps.Name),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateHistoryStructuralConstraints validates structural constraints for history pseudostates
+func (ps *Pseudostate) validateHistoryStructuralConstraints(context *ValidationContext, errors *ValidationErrors) {
+	// History pseudostates should be in composite states
+	if context.Region == nil {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"Pseudostate",
+			"Kind",
+			"history pseudostate should be contained within a region of a composite state (UML constraint)",
+			context.Path,
+		)
+	}
+
+	// History pseudostates should have names that indicate their type
+	if ps.Name != "" {
+		nameUpper := strings.ToUpper(ps.Name)
+		historyKeywords := []string{"HISTORY", "H"}
+		hasHistoryKeyword := false
+		for _, keyword := range historyKeywords {
+			if strings.Contains(nameUpper, keyword) {
+				hasHistoryKeyword = true
+				break
+			}
+		}
+
+		if !hasHistoryKeyword {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Pseudostate",
+				"Name",
+				fmt.Sprintf("history pseudostate name '%s' should suggest history purpose (UML best practice)", ps.Name),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateJoinForkStructuralConstraints validates structural constraints for join/fork pseudostates
+func (ps *Pseudostate) validateJoinForkStructuralConstraints(context *ValidationContext, errors *ValidationErrors) {
+	// Join/fork pseudostates should have names that indicate their purpose
+	if ps.Name != "" {
+		nameUpper := strings.ToUpper(ps.Name)
+		var expectedKeywords []string
+
+		if ps.Kind == PseudostateKindJoin {
+			expectedKeywords = []string{"JOIN", "MERGE", "SYNC"}
+		} else {
+			expectedKeywords = []string{"FORK", "SPLIT", "PARALLEL"}
+		}
+
+		hasExpectedKeyword := false
+		for _, keyword := range expectedKeywords {
+			if strings.Contains(nameUpper, keyword) {
+				hasExpectedKeyword = true
+				break
+			}
+		}
+
+		if !hasExpectedKeyword {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Pseudostate",
+				"Name",
+				fmt.Sprintf("%s pseudostate name '%s' should suggest %s purpose (UML best practice)", ps.Kind, ps.Name, strings.ToLower(string(ps.Kind))),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateJunctionChoiceStructuralConstraints validates structural constraints for junction/choice pseudostates
+func (ps *Pseudostate) validateJunctionChoiceStructuralConstraints(context *ValidationContext, errors *ValidationErrors) {
+	// Junction/choice pseudostates should have names that indicate their purpose
+	if ps.Name != "" {
+		nameUpper := strings.ToUpper(ps.Name)
+		var expectedKeywords []string
+
+		if ps.Kind == PseudostateKindJunction {
+			expectedKeywords = []string{"JUNCTION", "BRANCH", "DECISION"}
+		} else {
+			expectedKeywords = []string{"CHOICE", "DECIDE", "SELECT"}
+		}
+
+		hasExpectedKeyword := false
+		for _, keyword := range expectedKeywords {
+			if strings.Contains(nameUpper, keyword) {
+				hasExpectedKeyword = true
+				break
+			}
+		}
+
+		if !hasExpectedKeyword {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Pseudostate",
+				"Name",
+				fmt.Sprintf("%s pseudostate name '%s' should suggest %s purpose (UML best practice)", ps.Kind, ps.Name, strings.ToLower(string(ps.Kind))),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateConnectionPointStructuralConstraints validates structural constraints for connection point pseudostates
+func (ps *Pseudostate) validateConnectionPointStructuralConstraints(context *ValidationContext, errors *ValidationErrors) {
+	// Connection points should have names that indicate their direction
+	if ps.Name != "" {
+		nameUpper := strings.ToUpper(ps.Name)
+		var expectedKeywords []string
+
+		if ps.Kind == PseudostateKindEntryPoint {
+			expectedKeywords = []string{"ENTRY", "ENTER", "IN"}
+		} else {
+			expectedKeywords = []string{"EXIT", "OUT", "LEAVE"}
+		}
+
+		hasExpectedKeyword := false
+		for _, keyword := range expectedKeywords {
+			if strings.Contains(nameUpper, keyword) {
+				hasExpectedKeyword = true
+				break
+			}
+		}
+
+		if !hasExpectedKeyword {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Pseudostate",
+				"Name",
+				fmt.Sprintf("%s pseudostate name '%s' should suggest %s purpose (UML best practice)", ps.Kind, ps.Name, strings.ToLower(string(ps.Kind))),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateTerminateStructuralConstraints validates structural constraints for terminate pseudostates
+func (ps *Pseudostate) validateTerminateStructuralConstraints(context *ValidationContext, errors *ValidationErrors) {
+	// Terminate pseudostates should have names that indicate termination
+	if ps.Name != "" {
+		nameUpper := strings.ToUpper(ps.Name)
+		terminateKeywords := []string{"TERMINATE", "END", "STOP", "KILL"}
+		hasTerminateKeyword := false
+		for _, keyword := range terminateKeywords {
+			if strings.Contains(nameUpper, keyword) {
+				hasTerminateKeyword = true
+				break
+			}
+		}
+
+		if !hasTerminateKeyword {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Pseudostate",
+				"Name",
+				fmt.Sprintf("terminate pseudostate name '%s' should suggest termination purpose (UML best practice)", ps.Name),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validatePlacementConsistency validates pseudostate placement consistency
+func (ps *Pseudostate) validatePlacementConsistency(context *ValidationContext, errors *ValidationErrors) {
+	// Validate that pseudostate is placed in appropriate context
+	pathStr := strings.Join(context.Path, ".")
+
+	// Entry and exit points should be in connection point contexts
+	if ps.Kind == PseudostateKindEntryPoint || ps.Kind == PseudostateKindExitPoint {
+		if !strings.Contains(pathStr, "ConnectionPoints") && !strings.Contains(pathStr, "Connections") {
+			// Check if we're in a region's vertices collection, which would be inappropriate
+			if strings.Contains(pathStr, "Vertices") && context.Region != nil {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"Pseudostate",
+					"Placement",
+					fmt.Sprintf("%s pseudostate should be used as a connection point, not as a regular vertex in a region (UML constraint)", ps.Kind),
+					context.Path,
+				)
+			}
+		}
+	}
+
+	// Other pseudostates should typically be in region vertices
+	if ps.Kind != PseudostateKindEntryPoint && ps.Kind != PseudostateKindExitPoint {
+		if strings.Contains(pathStr, "ConnectionPoints") {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Pseudostate",
+				"Placement",
+				fmt.Sprintf("%s pseudostate should not be used as a connection point (UML constraint)", ps.Kind),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateFinalStateStructuralIntegrity performs enhanced structural integrity validation for FinalState
+func (fs *FinalState) validateFinalStateStructuralIntegrity(context *ValidationContext, errors *ValidationErrors) {
+	// Validate final state naming
+	fs.validateFinalStateNaming(context, errors)
+
+	// Validate final state placement
+	fs.validateFinalStatePlacement(context, errors)
+}
+
+// validateFinalStateNaming validates final state naming conventions
+func (fs *FinalState) validateFinalStateNaming(context *ValidationContext, errors *ValidationErrors) {
+	// Final states should have names that indicate completion
+	if fs.Name == "" {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"FinalState",
+			"Name",
+			"final state should have a name that indicates completion (UML best practice)",
+			context.Path,
+		)
+	} else {
+		// Check if name suggests completion
+		nameUpper := strings.ToUpper(fs.Name)
+		completionKeywords := []string{"FINAL", "END", "COMPLETE", "DONE", "FINISH", "TERMINATE"}
+		hasCompletionKeyword := false
+		for _, keyword := range completionKeywords {
+			if strings.Contains(nameUpper, keyword) {
+				hasCompletionKeyword = true
+				break
+			}
+		}
+
+		if !hasCompletionKeyword {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"FinalState",
+				"Name",
+				fmt.Sprintf("final state name '%s' should suggest completion or finality (UML best practice)", fs.Name),
+				context.Path,
+			)
+		}
+	}
+}
+
+// validateFinalStatePlacement validates final state placement
+func (fs *FinalState) validateFinalStatePlacement(context *ValidationContext, errors *ValidationErrors) {
+	// Final states should be in region vertices, not in connection points
+	pathStr := strings.Join(context.Path, ".")
+
+	if strings.Contains(pathStr, "ConnectionPoints") {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"FinalState",
+			"Placement",
+			"final state should not be used as a connection point (UML constraint)",
+			context.Path,
+		)
+	}
+
+	// Final states should be in regions that can actually reach them
+	if context.Region != nil {
+		// This is a more complex validation that would require analyzing the transition graph
+		// For now, we just ensure the final state is properly contained
 	}
 }
