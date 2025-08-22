@@ -90,6 +90,16 @@ func TestStateMachine_JSONSerialization(t *testing.T) {
 				},
 				Vertices: []*Vertex{
 					{
+						ID:   "state1",
+						Name: "InitialState",
+						Type: "state",
+					},
+					{
+						ID:   "state2",
+						Name: "CompositeState",
+						Type: "state",
+					},
+					{
 						ID:   "vertex1",
 						Name: "TestVertex",
 						Type: "pseudostate",

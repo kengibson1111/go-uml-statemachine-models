@@ -128,6 +128,11 @@ func (r *Region) ValidateWithErrors(context *ValidationContext, errors *Validati
 		vertexValidators[i] = vertex
 	}
 	helper.ValidateCollection(vertexValidators, "Vertices", "Region", context, errors)
+
+	// UML constraint validations
+	r.validateInitialStates(context, errors)
+	r.validateVertexContainment(context, errors)
+	r.validateTransitionScope(context, errors)
 }
 
 // validateConnectionPoints ensures connection points are entry/exit pseudostates
@@ -188,4 +193,252 @@ func (sm *StateMachine) validateMethodConstraints(context *ValidationContext, er
 			context.Path,
 		)
 	}
+}
+
+// validateInitialStates ensures at most one initial pseudostate per region
+// UML Constraint: A Region can have at most one initial pseudostate
+func (r *Region) validateInitialStates(context *ValidationContext, errors *ValidationErrors) {
+	initialCount := 0
+	var initialIndices []int
+
+	// Check vertices for initial pseudostates using naming conventions
+	for i, vertex := range r.Vertices {
+		if vertex == nil {
+			continue // This will be caught by collection validation
+		}
+
+		// Check if this vertex is an initial pseudostate
+		if vertex.Type == "pseudostate" && r.isInitialPseudostate(vertex) {
+			initialCount++
+			initialIndices = append(initialIndices, i)
+		}
+	}
+
+	// Also check states collection in case pseudostates are stored there
+	for i, state := range r.States {
+		if state == nil {
+			continue
+		}
+
+		if state.Type == "pseudostate" && r.isInitialPseudostate(&state.Vertex) {
+			initialCount++
+			initialIndices = append(initialIndices, i)
+		}
+	}
+
+	if initialCount > 1 {
+		errors.AddError(
+			ErrorTypeMultiplicity,
+			"Region",
+			"Vertices",
+			fmt.Sprintf("Region can have at most one initial pseudostate, found %d at indices: %v (UML constraint)", initialCount, initialIndices),
+			context.Path,
+		)
+	}
+}
+
+// validateVertexContainment verifies all vertices belong to the region
+// UML Constraint: All vertices in a region must be properly contained within that region
+func (r *Region) validateVertexContainment(context *ValidationContext, errors *ValidationErrors) {
+	// Create a map of vertex IDs for quick lookup
+	vertexIDs := make(map[string]bool)
+	for _, vertex := range r.Vertices {
+		if vertex != nil {
+			vertexIDs[vertex.ID] = true
+		}
+	}
+
+	// Check that all states are also in the vertices collection
+	for i, state := range r.States {
+		if state == nil {
+			continue
+		}
+
+		if !vertexIDs[state.ID] {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Region",
+				"States",
+				fmt.Sprintf("state at index %d (ID: %s) is not contained in the region's vertices collection (UML constraint)", i, state.ID),
+				context.WithPathIndex("States", i).Path,
+			)
+		}
+	}
+
+	// Validate that vertices have consistent containment
+	// All vertices should logically belong to this region
+	for i, vertex := range r.Vertices {
+		if vertex == nil {
+			continue
+		}
+
+		// Ensure vertex has proper identification
+		if vertex.ID == "" {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Region",
+				"Vertices",
+				fmt.Sprintf("vertex at index %d must have a valid ID for proper containment (UML constraint)", i),
+				context.WithPathIndex("Vertices", i).Path,
+			)
+		}
+
+		// Validate vertex type is appropriate for region containment
+		validTypes := []string{"state", "pseudostate", "finalstate"}
+		isValidType := false
+		for _, validType := range validTypes {
+			if vertex.Type == validType {
+				isValidType = true
+				break
+			}
+		}
+
+		if !isValidType {
+			errors.AddError(
+				ErrorTypeConstraint,
+				"Region",
+				"Vertices",
+				fmt.Sprintf("vertex at index %d has invalid type '%s' for region containment (UML constraint)", i, vertex.Type),
+				context.WithPathIndex("Vertices", i).Path,
+			)
+		}
+	}
+}
+
+// validateTransitionScope ensures transitions connect appropriate vertices
+// UML Constraint: Transitions must connect vertices that are appropriately scoped within the region
+func (r *Region) validateTransitionScope(context *ValidationContext, errors *ValidationErrors) {
+	// Create a map of vertex IDs for quick lookup
+	vertexIDs := make(map[string]bool)
+	for _, vertex := range r.Vertices {
+		if vertex != nil {
+			vertexIDs[vertex.ID] = true
+		}
+	}
+
+	// Validate each transition
+	for i, transition := range r.Transitions {
+		if transition == nil {
+			continue // This will be caught by collection validation
+		}
+
+		transitionContext := context.WithPathIndex("Transitions", i)
+
+		// Validate source vertex is in this region
+		if transition.Source != nil {
+			if !vertexIDs[transition.Source.ID] {
+				errors.AddError(
+					ErrorTypeConstraint,
+					"Region",
+					"Transitions",
+					fmt.Sprintf("transition at index %d has source vertex (ID: %s) that is not contained in this region (UML constraint)", i, transition.Source.ID),
+					transitionContext.Path,
+				)
+			}
+		}
+
+		// Validate target vertex is in this region or is appropriately accessible
+		if transition.Target != nil {
+			if !vertexIDs[transition.Target.ID] {
+				// For external transitions, the target might be in a different region
+				// but for internal and local transitions, target must be in same region
+				if transition.Kind == TransitionKindInternal || transition.Kind == TransitionKindLocal {
+					errors.AddError(
+						ErrorTypeConstraint,
+						"Region",
+						"Transitions",
+						fmt.Sprintf("transition at index %d has target vertex (ID: %s) that is not contained in this region, but transition kind is %s (UML constraint)", i, transition.Target.ID, transition.Kind),
+						transitionContext.Path,
+					)
+				}
+				// For external transitions, we allow targets outside the region
+				// but we should validate they exist somewhere in the state machine
+			}
+		}
+
+		// Validate transition kind constraints
+		if transition.Source != nil && transition.Target != nil {
+			// Internal transitions must have the same source and target
+			if transition.Kind == TransitionKindInternal {
+				if transition.Source.ID != transition.Target.ID {
+					errors.AddError(
+						ErrorTypeConstraint,
+						"Region",
+						"Transitions",
+						fmt.Sprintf("internal transition at index %d must have the same source and target vertex (UML constraint)", i),
+						transitionContext.Path,
+					)
+				}
+			}
+
+			// Validate that source and target are compatible types
+			r.validateTransitionVertexCompatibility(transition, i, transitionContext, errors)
+		}
+	}
+}
+
+// validateTransitionVertexCompatibility validates that source and target vertices are compatible
+func (r *Region) validateTransitionVertexCompatibility(transition *Transition, index int, context *ValidationContext, errors *ValidationErrors) {
+	if transition.Source == nil || transition.Target == nil {
+		return // Already validated by required field validation
+	}
+
+	source := transition.Source
+	target := transition.Target
+
+	// Validate pseudostate transition rules
+	if source.Type == "pseudostate" {
+		// Initial pseudostates can only have outgoing transitions
+		if source.Name == "Initial" || source.ID == "initial" {
+			// This is handled by the pseudostate validation, but we can add region-specific checks
+		}
+
+		// Junction and choice pseudostates have specific rules
+		// (We'd need access to PseudostateKind to implement these fully)
+	}
+
+	if target.Type == "pseudostate" {
+		// Final states cannot have outgoing transitions (but can be targets)
+		// Terminate pseudostates have specific rules
+	}
+
+	// Validate that final states don't have outgoing transitions
+	if source.Type == "finalstate" {
+		errors.AddError(
+			ErrorTypeConstraint,
+			"Region",
+			"Transitions",
+			fmt.Sprintf("transition at index %d has a final state as source, which is not allowed (UML constraint)", index),
+			context.Path,
+		)
+	}
+
+	// Additional compatibility checks can be added here based on UML rules
+}
+
+// isInitialPseudostate checks if a vertex represents an initial pseudostate
+// This is a helper method that uses naming conventions to identify initial pseudostates
+func (r *Region) isInitialPseudostate(vertex *Vertex) bool {
+	if vertex == nil || vertex.Type != "pseudostate" {
+		return false
+	}
+
+	// Check common naming patterns for initial pseudostates
+	name := vertex.Name
+	id := vertex.ID
+
+	// Common patterns for initial pseudostates
+	initialPatterns := []string{
+		"initial", "Initial", "INITIAL",
+		"init", "Init", "INIT",
+		"start", "Start", "START",
+	}
+
+	for _, pattern := range initialPatterns {
+		if name == pattern || id == pattern {
+			return true
+		}
+	}
+
+	return false
 }
