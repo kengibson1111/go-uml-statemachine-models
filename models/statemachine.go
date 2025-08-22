@@ -1,7 +1,6 @@
 package models
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -18,24 +17,41 @@ type StateMachine struct {
 
 // Validate validates the StateMachine data integrity
 func (sm *StateMachine) Validate() error {
-	if sm.ID == "" {
-		return fmt.Errorf("StateMachine ID cannot be empty")
+	context := NewValidationContext().WithStateMachine(sm)
+	errors := &ValidationErrors{}
+	sm.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the StateMachine with the provided context
+func (sm *StateMachine) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	sm.ValidateWithErrors(context.WithStateMachine(sm), errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the StateMachine and collects all errors
+func (sm *StateMachine) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
-	if sm.Name == "" {
-		return fmt.Errorf("StateMachine Name cannot be empty")
-	}
-	if sm.Version == "" {
-		return fmt.Errorf("StateMachine Version cannot be empty")
+	if errors == nil {
+		return
 	}
 
-	// Validate regions
+	helper := NewValidationHelper()
+
+	// Validate required fields
+	helper.ValidateRequired(sm.ID, "ID", "StateMachine", context, errors)
+	helper.ValidateRequired(sm.Name, "Name", "StateMachine", context, errors)
+	helper.ValidateRequired(sm.Version, "Version", "StateMachine", context, errors)
+
+	// Validate regions collection
+	regionValidators := make([]Validator, len(sm.Regions))
 	for i, region := range sm.Regions {
-		if err := region.Validate(); err != nil {
-			return fmt.Errorf("invalid region at index %d: %w", i, err)
-		}
+		regionValidators[i] = region
 	}
-
-	return nil
+	helper.ValidateCollection(regionValidators, "Regions", "StateMachine", context, errors)
 }
 
 // Region represents a region within a state machine
@@ -49,33 +65,52 @@ type Region struct {
 
 // Validate validates the Region data integrity
 func (r *Region) Validate() error {
-	if r.ID == "" {
-		return fmt.Errorf("Region ID cannot be empty")
+	context := NewValidationContext().WithRegion(r)
+	errors := &ValidationErrors{}
+	r.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Region with the provided context
+func (r *Region) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	r.ValidateWithErrors(context.WithRegion(r), errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Region and collects all errors
+func (r *Region) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
-	if r.Name == "" {
-		return fmt.Errorf("Region Name cannot be empty")
+	if errors == nil {
+		return
 	}
 
-	// Validate states
+	helper := NewValidationHelper()
+
+	// Validate required fields
+	helper.ValidateRequired(r.ID, "ID", "Region", context, errors)
+	helper.ValidateRequired(r.Name, "Name", "Region", context, errors)
+
+	// Validate states collection
+	stateValidators := make([]Validator, len(r.States))
 	for i, state := range r.States {
-		if err := state.Validate(); err != nil {
-			return fmt.Errorf("invalid state at index %d: %w", i, err)
-		}
+		stateValidators[i] = state
 	}
+	helper.ValidateCollection(stateValidators, "States", "Region", context, errors)
 
-	// Validate transitions
+	// Validate transitions collection
+	transitionValidators := make([]Validator, len(r.Transitions))
 	for i, transition := range r.Transitions {
-		if err := transition.Validate(); err != nil {
-			return fmt.Errorf("invalid transition at index %d: %w", i, err)
-		}
+		transitionValidators[i] = transition
 	}
+	helper.ValidateCollection(transitionValidators, "Transitions", "Region", context, errors)
 
-	// Validate vertices
+	// Validate vertices collection
+	vertexValidators := make([]Validator, len(r.Vertices))
 	for i, vertex := range r.Vertices {
-		if err := vertex.Validate(); err != nil {
-			return fmt.Errorf("invalid vertex at index %d: %w", i, err)
-		}
+		vertexValidators[i] = vertex
 	}
-
-	return nil
+	helper.ValidateCollection(vertexValidators, "Vertices", "Region", context, errors)
 }

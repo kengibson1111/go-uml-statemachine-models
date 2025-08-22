@@ -12,27 +12,38 @@ type Vertex struct {
 
 // Validate validates the Vertex data integrity
 func (v *Vertex) Validate() error {
-	if v.ID == "" {
-		return fmt.Errorf("Vertex ID cannot be empty")
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	v.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Vertex with the provided context
+func (v *Vertex) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	v.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Vertex and collects all errors
+func (v *Vertex) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
-	if v.Name == "" {
-		return fmt.Errorf("Vertex Name cannot be empty")
+	if errors == nil {
+		return
 	}
-	if v.Type == "" {
-		return fmt.Errorf("Vertex Type cannot be empty")
-	}
+
+	helper := NewValidationHelper()
+
+	// Validate required fields
+	helper.ValidateRequired(v.ID, "ID", "Vertex", context, errors)
+	helper.ValidateRequired(v.Name, "Name", "Vertex", context, errors)
+	helper.ValidateRequired(v.Type, "Type", "Vertex", context, errors)
 
 	// Validate type is one of the allowed values
-	validTypes := map[string]bool{
-		"state":       true,
-		"pseudostate": true,
-		"finalstate":  true,
-	}
-	if !validTypes[v.Type] {
-		return fmt.Errorf("invalid Vertex Type: %s, must be one of: state, pseudostate, finalstate", v.Type)
-	}
-
-	return nil
+	validTypes := []string{"state", "pseudostate", "finalstate"}
+	helper.ValidateEnum(v.Type, "Type", "Vertex", validTypes, context, errors)
 }
 
 // State represents a state in a state machine
@@ -52,57 +63,67 @@ type State struct {
 
 // Validate validates the State data integrity
 func (s *State) Validate() error {
-	// Validate embedded vertex
-	if err := s.Vertex.Validate(); err != nil {
-		return fmt.Errorf("invalid vertex in state: %w", err)
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	s.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the State with the provided context
+func (s *State) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	s.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the State and collects all errors
+func (s *State) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
+	if errors == nil {
+		return
+	}
+
+	helper := NewValidationHelper()
+
+	// Validate embedded vertex
+	s.Vertex.ValidateWithErrors(context.WithPath("Vertex"), errors)
 
 	// Validate that type is "state"
 	if s.Type != "state" {
-		return fmt.Errorf("State must have type 'state', got: %s", s.Type)
+		errors.AddError(
+			ErrorTypeConstraint,
+			"State",
+			"Type",
+			fmt.Sprintf("State must have type 'state', got: %s", s.Type),
+			context.Path,
+		)
 	}
 
 	// Validate regions if composite
 	if s.IsComposite {
+		regionValidators := make([]Validator, len(s.Regions))
 		for i, region := range s.Regions {
-			if err := region.Validate(); err != nil {
-				return fmt.Errorf("invalid region at index %d in composite state: %w", i, err)
-			}
+			regionValidators[i] = region
 		}
+		helper.ValidateCollection(regionValidators, "Regions", "State", context, errors)
 	}
 
 	// Validate behaviors
-	if s.Entry != nil {
-		if err := s.Entry.Validate(); err != nil {
-			return fmt.Errorf("invalid entry behavior: %w", err)
-		}
-	}
-	if s.Exit != nil {
-		if err := s.Exit.Validate(); err != nil {
-			return fmt.Errorf("invalid exit behavior: %w", err)
-		}
-	}
-	if s.DoActivity != nil {
-		if err := s.DoActivity.Validate(); err != nil {
-			return fmt.Errorf("invalid do activity behavior: %w", err)
-		}
-	}
+	helper.ValidateReference(s.Entry, "Entry", "State", context, errors, false)
+	helper.ValidateReference(s.Exit, "Exit", "State", context, errors, false)
+	helper.ValidateReference(s.DoActivity, "DoActivity", "State", context, errors, false)
 
 	// Validate submachine if present
-	if s.Submachine != nil {
-		if err := s.Submachine.Validate(); err != nil {
-			return fmt.Errorf("invalid submachine: %w", err)
-		}
-	}
+	helper.ValidateReference(s.Submachine, "Submachine", "State", context, errors, false)
 
 	// Validate connections
+	connectionValidators := make([]Validator, len(s.Connections))
 	for i, conn := range s.Connections {
-		if err := conn.Validate(); err != nil {
-			return fmt.Errorf("invalid connection at index %d: %w", i, err)
-		}
+		connectionValidators[i] = conn
 	}
-
-	return nil
+	helper.ValidateCollection(connectionValidators, "Connections", "State", context, errors)
 }
 
 // PseudostateKind represents the kind of pseudostate
@@ -146,22 +167,52 @@ type Pseudostate struct {
 
 // Validate validates the Pseudostate data integrity
 func (ps *Pseudostate) Validate() error {
-	// Validate embedded vertex
-	if err := ps.Vertex.Validate(); err != nil {
-		return fmt.Errorf("invalid vertex in pseudostate: %w", err)
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	ps.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Pseudostate with the provided context
+func (ps *Pseudostate) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	ps.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Pseudostate and collects all errors
+func (ps *Pseudostate) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
+	if errors == nil {
+		return
+	}
+
+	// Validate embedded vertex
+	ps.Vertex.ValidateWithErrors(context.WithPath("Vertex"), errors)
 
 	// Validate that type is "pseudostate"
 	if ps.Type != "pseudostate" {
-		return fmt.Errorf("Pseudostate must have type 'pseudostate', got: %s", ps.Type)
+		errors.AddError(
+			ErrorTypeConstraint,
+			"Pseudostate",
+			"Type",
+			fmt.Sprintf("Pseudostate must have type 'pseudostate', got: %s", ps.Type),
+			context.Path,
+		)
 	}
 
 	// Validate kind
 	if !ps.Kind.IsValid() {
-		return fmt.Errorf("invalid PseudostateKind: %s", ps.Kind)
+		errors.AddError(
+			ErrorTypeInvalid,
+			"Pseudostate",
+			"Kind",
+			fmt.Sprintf("invalid PseudostateKind: %s", ps.Kind),
+			context.Path,
+		)
 	}
-
-	return nil
 }
 
 // FinalState represents a final state in a state machine
@@ -171,17 +222,41 @@ type FinalState struct {
 
 // Validate validates the FinalState data integrity
 func (fs *FinalState) Validate() error {
-	// Validate embedded vertex
-	if err := fs.Vertex.Validate(); err != nil {
-		return fmt.Errorf("invalid vertex in final state: %w", err)
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	fs.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the FinalState with the provided context
+func (fs *FinalState) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	fs.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the FinalState and collects all errors
+func (fs *FinalState) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
+	if errors == nil {
+		return
+	}
+
+	// Validate embedded vertex
+	fs.Vertex.ValidateWithErrors(context.WithPath("Vertex"), errors)
 
 	// Validate that type is "finalstate"
 	if fs.Type != "finalstate" {
-		return fmt.Errorf("FinalState must have type 'finalstate', got: %s", fs.Type)
+		errors.AddError(
+			ErrorTypeConstraint,
+			"FinalState",
+			"Type",
+			fmt.Sprintf("FinalState must have type 'finalstate', got: %s", fs.Type),
+			context.Path,
+		)
 	}
-
-	return nil
 }
 
 // ConnectionPointReference represents a connection point reference
@@ -194,24 +269,44 @@ type ConnectionPointReference struct {
 
 // Validate validates the ConnectionPointReference data integrity
 func (cpr *ConnectionPointReference) Validate() error {
-	// Validate embedded vertex
-	if err := cpr.Vertex.Validate(); err != nil {
-		return fmt.Errorf("invalid vertex in connection point reference: %w", err)
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	cpr.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the ConnectionPointReference with the provided context
+func (cpr *ConnectionPointReference) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	cpr.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the ConnectionPointReference and collects all errors
+func (cpr *ConnectionPointReference) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
+	if errors == nil {
+		return
+	}
+
+	helper := NewValidationHelper()
+
+	// Validate embedded vertex
+	cpr.Vertex.ValidateWithErrors(context.WithPath("Vertex"), errors)
 
 	// Validate entry pseudostates
+	entryValidators := make([]Validator, len(cpr.Entry))
 	for i, entry := range cpr.Entry {
-		if err := entry.Validate(); err != nil {
-			return fmt.Errorf("invalid entry pseudostate at index %d: %w", i, err)
-		}
+		entryValidators[i] = entry
 	}
+	helper.ValidateCollection(entryValidators, "Entry", "ConnectionPointReference", context, errors)
 
 	// Validate exit pseudostates
+	exitValidators := make([]Validator, len(cpr.Exit))
 	for i, exit := range cpr.Exit {
-		if err := exit.Validate(); err != nil {
-			return fmt.Errorf("invalid exit pseudostate at index %d: %w", i, err)
-		}
+		exitValidators[i] = exit
 	}
-
-	return nil
+	helper.ValidateCollection(exitValidators, "Exit", "ConnectionPointReference", context, errors)
 }

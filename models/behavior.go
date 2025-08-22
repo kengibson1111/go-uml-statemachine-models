@@ -1,7 +1,5 @@
 package models
 
-import "fmt"
-
 // Constraint represents a constraint (guard condition)
 type Constraint struct {
 	ID            string `json:"id" validate:"required"`
@@ -12,13 +10,33 @@ type Constraint struct {
 
 // Validate validates the Constraint data integrity
 func (c *Constraint) Validate() error {
-	if c.ID == "" {
-		return fmt.Errorf("Constraint ID cannot be empty")
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	c.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Constraint with the provided context
+func (c *Constraint) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	c.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Constraint and collects all errors
+func (c *Constraint) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
-	if c.Specification == "" {
-		return fmt.Errorf("Constraint Specification cannot be empty")
+	if errors == nil {
+		return
 	}
-	return nil
+
+	helper := NewValidationHelper()
+
+	// Validate required fields
+	helper.ValidateRequired(c.ID, "ID", "Constraint", context, errors)
+	helper.ValidateRequired(c.Specification, "Specification", "Constraint", context, errors)
 }
 
 // Behavior represents a behavior (action/activity)
@@ -31,13 +49,33 @@ type Behavior struct {
 
 // Validate validates the Behavior data integrity
 func (b *Behavior) Validate() error {
-	if b.ID == "" {
-		return fmt.Errorf("Behavior ID cannot be empty")
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	b.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Behavior with the provided context
+func (b *Behavior) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	b.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Behavior and collects all errors
+func (b *Behavior) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
-	if b.Specification == "" {
-		return fmt.Errorf("Behavior Specification cannot be empty")
+	if errors == nil {
+		return
 	}
-	return nil
+
+	helper := NewValidationHelper()
+
+	// Validate required fields
+	helper.ValidateRequired(b.ID, "ID", "Behavior", context, errors)
+	helper.ValidateRequired(b.Specification, "Specification", "Behavior", context, errors)
 }
 
 // Effect is an alias for Behavior to maintain semantic clarity

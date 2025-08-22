@@ -36,48 +36,56 @@ type Transition struct {
 
 // Validate validates the Transition data integrity
 func (t *Transition) Validate() error {
-	if t.ID == "" {
-		return fmt.Errorf("Transition ID cannot be empty")
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	t.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Transition with the provided context
+func (t *Transition) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	t.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Transition and collects all errors
+func (t *Transition) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
+	}
+	if errors == nil {
+		return
 	}
 
-	if t.Source == nil {
-		return fmt.Errorf("Transition Source cannot be nil")
-	}
-	if err := t.Source.Validate(); err != nil {
-		return fmt.Errorf("invalid source vertex: %w", err)
-	}
+	helper := NewValidationHelper()
 
-	if t.Target == nil {
-		return fmt.Errorf("Transition Target cannot be nil")
-	}
-	if err := t.Target.Validate(); err != nil {
-		return fmt.Errorf("invalid target vertex: %w", err)
-	}
+	// Validate required fields
+	helper.ValidateRequired(t.ID, "ID", "Transition", context, errors)
 
+	// Validate required references
+	helper.ValidateReference(t.Source, "Source", "Transition", context, errors, true)
+	helper.ValidateReference(t.Target, "Target", "Transition", context, errors, true)
+
+	// Validate kind
 	if !t.Kind.IsValid() {
-		return fmt.Errorf("invalid TransitionKind: %s", t.Kind)
+		errors.AddError(
+			ErrorTypeInvalid,
+			"Transition",
+			"Kind",
+			fmt.Sprintf("invalid TransitionKind: %s", t.Kind),
+			context.Path,
+		)
 	}
 
-	// Validate triggers
+	// Validate triggers collection
+	triggerValidators := make([]Validator, len(t.Triggers))
 	for i, trigger := range t.Triggers {
-		if err := trigger.Validate(); err != nil {
-			return fmt.Errorf("invalid trigger at index %d: %w", i, err)
-		}
+		triggerValidators[i] = trigger
 	}
+	helper.ValidateCollection(triggerValidators, "Triggers", "Transition", context, errors)
 
-	// Validate guard constraint
-	if t.Guard != nil {
-		if err := t.Guard.Validate(); err != nil {
-			return fmt.Errorf("invalid guard constraint: %w", err)
-		}
-	}
-
-	// Validate effect behavior
-	if t.Effect != nil {
-		if err := t.Effect.Validate(); err != nil {
-			return fmt.Errorf("invalid effect behavior: %w", err)
-		}
-	}
-
-	return nil
+	// Validate optional references
+	helper.ValidateReference(t.Guard, "Guard", "Transition", context, errors, false)
+	helper.ValidateReference(t.Effect, "Effect", "Transition", context, errors, false)
 }

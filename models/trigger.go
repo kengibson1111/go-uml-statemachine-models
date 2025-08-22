@@ -34,16 +34,44 @@ type Event struct {
 
 // Validate validates the Event data integrity
 func (e *Event) Validate() error {
-	if e.ID == "" {
-		return fmt.Errorf("Event ID cannot be empty")
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	e.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Event with the provided context
+func (e *Event) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	e.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Event and collects all errors
+func (e *Event) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
-	if e.Name == "" {
-		return fmt.Errorf("Event Name cannot be empty")
+	if errors == nil {
+		return
 	}
+
+	helper := NewValidationHelper()
+
+	// Validate required fields
+	helper.ValidateRequired(e.ID, "ID", "Event", context, errors)
+	helper.ValidateRequired(e.Name, "Name", "Event", context, errors)
+
+	// Validate type
 	if !e.Type.IsValid() {
-		return fmt.Errorf("invalid EventType: %s", e.Type)
+		errors.AddError(
+			ErrorTypeInvalid,
+			"Event",
+			"Type",
+			fmt.Sprintf("invalid EventType: %s", e.Type),
+			context.Path,
+		)
 	}
-	return nil
 }
 
 // Trigger represents a trigger for a transition
@@ -55,17 +83,34 @@ type Trigger struct {
 
 // Validate validates the Trigger data integrity
 func (tr *Trigger) Validate() error {
-	if tr.ID == "" {
-		return fmt.Errorf("Trigger ID cannot be empty")
+	context := NewValidationContext()
+	errors := &ValidationErrors{}
+	tr.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateInContext validates the Trigger with the provided context
+func (tr *Trigger) ValidateInContext(context *ValidationContext) error {
+	errors := &ValidationErrors{}
+	tr.ValidateWithErrors(context, errors)
+	return errors.ToError()
+}
+
+// ValidateWithErrors validates the Trigger and collects all errors
+func (tr *Trigger) ValidateWithErrors(context *ValidationContext, errors *ValidationErrors) {
+	if context == nil {
+		context = NewValidationContext()
 	}
-	if tr.Name == "" {
-		return fmt.Errorf("Trigger Name cannot be empty")
+	if errors == nil {
+		return
 	}
-	if tr.Event == nil {
-		return fmt.Errorf("Trigger Event cannot be nil")
-	}
-	if err := tr.Event.Validate(); err != nil {
-		return fmt.Errorf("invalid event: %w", err)
-	}
-	return nil
+
+	helper := NewValidationHelper()
+
+	// Validate required fields
+	helper.ValidateRequired(tr.ID, "ID", "Trigger", context, errors)
+	helper.ValidateRequired(tr.Name, "Name", "Trigger", context, errors)
+
+	// Validate required reference
+	helper.ValidateReference(tr.Event, "Event", "Trigger", context, errors, true)
 }
