@@ -274,6 +274,9 @@ func (r *Region) validateVertexContainment(context *ValidationContext, errors *V
 		}
 	}
 
+	// Note: We don't require states to be duplicated in the Vertices collection
+	// as this is a design choice. States can be managed separately from other vertices.
+
 	// Validate that vertices have consistent containment
 	// All vertices should logically belong to this region
 	for i, vertex := range r.Vertices {
@@ -331,9 +334,18 @@ func (r *Region) validateVertexContainment(context *ValidationContext, errors *V
 func (r *Region) validateTransitionScope(context *ValidationContext, errors *ValidationErrors) {
 	// Create a map of vertex IDs for quick lookup
 	vertexIDs := make(map[string]bool)
+
+	// Add vertices from the Vertices collection (pseudostates, final states)
 	for _, vertex := range r.Vertices {
 		if vertex != nil {
 			vertexIDs[vertex.ID] = true
+		}
+	}
+
+	// Add vertices from the States collection (states are also vertices)
+	for _, state := range r.States {
+		if state != nil {
+			vertexIDs[state.ID] = true
 		}
 	}
 

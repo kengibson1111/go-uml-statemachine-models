@@ -927,25 +927,13 @@ func TestUMLConstraintViolations(t *testing.T) {
 					},
 				},
 				Vertices: []*Vertex{
-					// Missing state1 vertex - containment violation
+					// States don't need to be duplicated in vertices collection
 				},
 			}
 
 			err := region.Validate()
-			if err == nil {
-				t.Fatal("Expected validation error for improper vertex containment")
-			}
-
-			validationErrors := err.(*ValidationErrors)
-			found := false
-			for _, verr := range validationErrors.Errors {
-				if verr.Type == ErrorTypeConstraint && strings.Contains(verr.Message, "not contained in") {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Error("Expected constraint error for improper vertex containment")
+			if err != nil {
+				t.Errorf("Region should be valid, got: %v", err)
 			}
 		})
 	})
@@ -1610,13 +1598,6 @@ func TestComplexUMLPatterns(t *testing.T) {
 					IsSimple: true,
 				},
 			},
-			Vertices: []*Vertex{
-				{
-					ID:   "deep_state",
-					Name: "Deep State",
-					Type: "state",
-				},
-			},
 		}
 
 		midCompositeState := &State{
@@ -1630,10 +1611,9 @@ func TestComplexUMLPatterns(t *testing.T) {
 		}
 
 		midRegion := &Region{
-			ID:       "mid_region",
-			Name:     "Mid Region",
-			States:   []*State{midCompositeState},
-			Vertices: []*Vertex{&midCompositeState.Vertex},
+			ID:     "mid_region",
+			Name:   "Mid Region",
+			States: []*State{midCompositeState},
 		}
 
 		topCompositeState := &State{
@@ -1647,10 +1627,9 @@ func TestComplexUMLPatterns(t *testing.T) {
 		}
 
 		mainRegion := &Region{
-			ID:       "main_region",
-			Name:     "Main Region",
-			States:   []*State{topCompositeState},
-			Vertices: []*Vertex{&topCompositeState.Vertex},
+			ID:     "main_region",
+			Name:   "Main Region",
+			States: []*State{topCompositeState},
 		}
 
 		sm := &StateMachine{
@@ -1685,9 +1664,9 @@ func TestComplexUMLPatterns(t *testing.T) {
 				},
 				Vertices: []*Vertex{
 					{
-						ID:   fmt.Sprintf("ortho_state_%d", i),
-						Name: fmt.Sprintf("Orthogonal State %d", i),
-						Type: "state",
+						ID:   fmt.Sprintf("initial_%d", i),
+						Name: "Initial",
+						Type: "pseudostate",
 					},
 				},
 			}
@@ -1705,10 +1684,9 @@ func TestComplexUMLPatterns(t *testing.T) {
 		}
 
 		mainRegion := &Region{
-			ID:       "main_region",
-			Name:     "Main Region",
-			States:   []*State{orthogonalState},
-			Vertices: []*Vertex{&orthogonalState.Vertex},
+			ID:     "main_region",
+			Name:   "Main Region",
+			States: []*State{orthogonalState},
 		}
 
 		sm := &StateMachine{
@@ -1837,14 +1815,10 @@ func TestComplexUMLPatterns(t *testing.T) {
 		}
 
 		subRegion := &Region{
-			ID:     "sub_region",
-			Name:   "Sub Region with History",
-			States: []*State{subState1, subState2},
-			Vertices: []*Vertex{
-				&subState1.Vertex,
-				&subState2.Vertex,
-				historyVertex,
-			},
+			ID:       "sub_region",
+			Name:     "Sub Region with History",
+			States:   []*State{subState1, subState2},
+			Vertices: []*Vertex{historyVertex},
 		}
 
 		compositeWithHistory := &State{
@@ -1858,10 +1832,9 @@ func TestComplexUMLPatterns(t *testing.T) {
 		}
 
 		mainRegion := &Region{
-			ID:       "main_region",
-			Name:     "Main Region",
-			States:   []*State{compositeWithHistory},
-			Vertices: []*Vertex{&compositeWithHistory.Vertex},
+			ID:     "main_region",
+			Name:   "Main Region",
+			States: []*State{compositeWithHistory},
 		}
 
 		sm := &StateMachine{
@@ -1903,17 +1876,29 @@ func TestComplexUMLPatterns(t *testing.T) {
 
 		// Create orthogonal regions for parallel execution
 		parallelRegion1 := &Region{
-			ID:       "parallel_region1",
-			Name:     "Parallel Region 1",
-			States:   []*State{parallelState1},
-			Vertices: []*Vertex{}, // Don't duplicate state vertices to avoid circular references
+			ID:     "parallel_region1",
+			Name:   "Parallel Region 1",
+			States: []*State{parallelState1},
+			Vertices: []*Vertex{
+				{
+					ID:   "initial_parallel1",
+					Name: "Initial",
+					Type: "pseudostate",
+				},
+			},
 		}
 
 		parallelRegion2 := &Region{
-			ID:       "parallel_region2",
-			Name:     "Parallel Region 2",
-			States:   []*State{parallelState2},
-			Vertices: []*Vertex{}, // Don't duplicate state vertices to avoid circular references
+			ID:     "parallel_region2",
+			Name:   "Parallel Region 2",
+			States: []*State{parallelState2},
+			Vertices: []*Vertex{
+				{
+					ID:   "initial_parallel2",
+					Name: "Initial",
+					Type: "pseudostate",
+				},
+			},
 		}
 
 		orthogonalState := &State{

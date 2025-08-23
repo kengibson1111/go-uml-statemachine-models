@@ -42,66 +42,60 @@ func ValidationUtilitiesDemo() {
 
 // createDemoStateMachine creates a comprehensive state machine for demonstration
 func createDemoStateMachine() *StateMachine {
+	// Create vertices first so we can reference them in transitions
+	initialVertex := &Vertex{
+		ID:   "initial-pseudostate",
+		Name: "Initial",
+		Type: "pseudostate",
+	}
+	finalVertex := &Vertex{
+		ID:   "final-state",
+		Name: "Final",
+		Type: "finalstate",
+	}
+
+	idleState := &State{
+		Vertex: Vertex{
+			ID:   "idle-state",
+			Name: "Idle State",
+			Type: "state",
+		},
+		IsSimple: true,
+	}
+
+	activeState := &State{
+		Vertex: Vertex{
+			ID:   "active-state",
+			Name: "Active State",
+			Type: "state",
+		},
+		IsSimple: true,
+	}
+
 	return &StateMachine{
 		ID:      "demo-statemachine",
 		Name:    "Demo State Machine",
 		Version: "1.0.0",
 		Regions: []*Region{
 			{
-				ID:   "main-region",
-				Name: "Main Region",
-				Vertices: []*Vertex{
-					{
-						ID:   "initial-pseudostate",
-						Name: "Initial",
-						Type: "pseudostate",
-					},
-					{
-						ID:   "idle-state",
-						Name: "Idle State",
-						Type: "state",
-					},
-					{
-						ID:   "active-state",
-						Name: "Active State",
-						Type: "state",
-					},
-					{
-						ID:   "final-state",
-						Name: "Final",
-						Type: "finalstate",
-					},
-				},
+				ID:       "main-region",
+				Name:     "Main Region",
+				States:   []*State{idleState, activeState},
+				Vertices: []*Vertex{initialVertex, finalVertex},
 				Transitions: []*Transition{
 					{
-						ID:   "init-to-idle",
-						Name: "Initialize to Idle",
-						Source: &Vertex{
-							ID:   "initial-pseudostate",
-							Name: "Initial",
-							Type: "pseudostate",
-						},
-						Target: &Vertex{
-							ID:   "idle-state",
-							Name: "Idle State",
-							Type: "state",
-						},
-						Kind: TransitionKindExternal,
+						ID:     "init-to-idle",
+						Name:   "Initialize to Idle",
+						Source: initialVertex,
+						Target: &idleState.Vertex,
+						Kind:   TransitionKindExternal,
 					},
 					{
-						ID:   "idle-to-active",
-						Name: "Activate",
-						Source: &Vertex{
-							ID:   "idle-state",
-							Name: "Idle State",
-							Type: "state",
-						},
-						Target: &Vertex{
-							ID:   "active-state",
-							Name: "Active State",
-							Type: "state",
-						},
-						Kind: TransitionKindExternal,
+						ID:     "idle-to-active",
+						Name:   "Activate",
+						Source: &idleState.Vertex,
+						Target: &activeState.Vertex,
+						Kind:   TransitionKindExternal,
 					},
 				},
 			},

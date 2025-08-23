@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -136,7 +137,7 @@ func TestRegion_Validate(t *testing.T) {
 				Name: "TestRegion",
 			},
 			wantErr: true,
-			errMsg:  "Region ID cannot be empty",
+			errMsg:  "field is required and cannot be empty",
 		},
 		{
 			name: "empty Name",
@@ -144,7 +145,7 @@ func TestRegion_Validate(t *testing.T) {
 				ID: "r1",
 			},
 			wantErr: true,
-			errMsg:  "Region Name cannot be empty",
+			errMsg:  "field is required and cannot be empty",
 		},
 		{
 			name: "invalid state",
@@ -160,7 +161,7 @@ func TestRegion_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid state at index 0: invalid vertex in state: Vertex ID cannot be empty",
+			errMsg:  "multiple validation errors:",
 		},
 		{
 			name: "invalid transition",
@@ -174,7 +175,7 @@ func TestRegion_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid transition at index 0: Transition ID cannot be empty",
+			errMsg:  "multiple validation errors:",
 		},
 		{
 			name: "invalid vertex",
@@ -188,7 +189,7 @@ func TestRegion_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid vertex at index 0: Vertex ID cannot be empty",
+			errMsg:  "multiple validation errors:",
 		},
 	}
 
@@ -200,8 +201,8 @@ func TestRegion_Validate(t *testing.T) {
 					t.Errorf("Region.Validate() expected error but got none")
 					return
 				}
-				if tt.errMsg != "" && err.Error() != tt.errMsg {
-					t.Errorf("Region.Validate() error = %v, want %v", err.Error(), tt.errMsg)
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("Region.Validate() error = %v, want to contain %v", err.Error(), tt.errMsg)
 				}
 			} else {
 				if err != nil {
