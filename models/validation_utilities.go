@@ -362,7 +362,7 @@ func (vra *ValidationResultAggregator) GetDetailedReport() string {
 	var report strings.Builder
 	totalErrors := vra.GetTotalErrorCount()
 
-	report.WriteString(fmt.Sprintf("Detailed Validation Report\n"))
+	report.WriteString("Detailed Validation Report\n")
 	report.WriteString(fmt.Sprintf("Generated: %s\n", time.Now().Format("2006-01-02 15:04:05")))
 	report.WriteString(fmt.Sprintf("Total Errors: %d across %d object(s)\n", totalErrors, len(vra.results)))
 	report.WriteString(strings.Repeat("=", 80) + "\n\n")
