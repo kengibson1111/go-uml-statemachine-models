@@ -257,25 +257,39 @@ func (r *Region) validateVertexContainment(context *ValidationContext, errors *V
 		}
 	}
 
-	// Collect vertex IDs and check for overlaps with states
+	// Collect vertex IDs
 	for _, vertex := range r.Vertices {
 		if vertex != nil {
 			vertexIDs[vertex.ID] = true
-			// Check if this vertex ID is also used by a state (which would be incorrect)
-			if stateIDs[vertex.ID] {
-				errors.AddError(
-					ErrorTypeConstraint,
-					"Region",
-					"States",
-					fmt.Sprintf("duplicate vertex ID '%s' found in vertices collection and states collection at index %d (structural integrity violation)", vertex.ID, 0),
-					context.Path,
-				)
-			}
 		}
 	}
 
-	// Note: We don't require states to be duplicated in the Vertices collection
-	// as this is a design choice. States can be managed separately from other vertices.
+	// Check that all states are also represented in the vertices collection
+	// Only enforce this if there are vertices with state types in the vertices collection
+	hasStateVertices := false
+	for _, vertex := range r.Vertices {
+		if vertex != nil && vertex.Type == "state" {
+			hasStateVertices = true
+			break
+		}
+	}
+
+	// If vertices collection contains states, then all states should be represented there
+	if hasStateVertices {
+		for i, state := range r.States {
+			if state != nil {
+				if !vertexIDs[state.ID] {
+					errors.AddError(
+						ErrorTypeConstraint,
+						"Region",
+						"States",
+						fmt.Sprintf("state at index %d (ID: %s) is not contained in the region's vertices collection (UML constraint)", i, state.ID),
+						context.WithPathIndex("States", i).Path,
+					)
+				}
+			}
+		}
+	}
 
 	// Validate that vertices have consistent containment
 	// All vertices should logically belong to this region
@@ -296,35 +310,24 @@ func (r *Region) validateVertexContainment(context *ValidationContext, errors *V
 		}
 
 		// Validate vertex type is appropriate for vertices collection
-		// States should be in States collection, not Vertices collection
-		if vertex.Type == "state" {
+		// Allow states, pseudostates, and final states in vertices collection
+		validTypes := []string{"state", "pseudostate", "finalstate"}
+		isValidType := false
+		for _, validType := range validTypes {
+			if vertex.Type == validType {
+				isValidType = true
+				break
+			}
+		}
+
+		if !isValidType {
 			errors.AddError(
 				ErrorTypeConstraint,
 				"Region",
 				"Vertices",
-				fmt.Sprintf("vertex at index %d has type 'state' but should be in States collection, not Vertices collection (UML constraint)", i),
+				fmt.Sprintf("vertex at index %d has invalid type '%s' for region containment (UML constraint)", i, vertex.Type),
 				context.WithPathIndex("Vertices", i).Path,
 			)
-		} else {
-			// For non-state vertices, validate they have appropriate types
-			validTypes := []string{"pseudostate", "finalstate"}
-			isValidType := false
-			for _, validType := range validTypes {
-				if vertex.Type == validType {
-					isValidType = true
-					break
-				}
-			}
-
-			if !isValidType {
-				errors.AddError(
-					ErrorTypeConstraint,
-					"Region",
-					"Vertices",
-					fmt.Sprintf("vertex at index %d has invalid type '%s' for vertices collection (UML constraint)", i, vertex.Type),
-					context.WithPathIndex("Vertices", i).Path,
-				)
-			}
 		}
 	}
 }
@@ -622,44 +625,46 @@ func (r *Region) validateStructuralIntegrity(context *ValidationContext, errors 
 
 // validateVertexIDConsistency validates that vertex IDs are consistent across collections
 func (r *Region) validateVertexIDConsistency(context *ValidationContext, errors *ValidationErrors) {
-	// Check for duplicate vertex IDs within the region
-	vertexIDs := make(map[string]string) // ID -> collection type
+	// Check for duplicate vertex IDs within each collection separately
+	// Note: States can appear in both States and Vertices collections as per UML design
 
-	// Check vertices collection
+	// Check for duplicates within vertices collection
+	vertexIDs := make(map[string]int)
 	for i, vertex := range r.Vertices {
 		if vertex == nil {
 			continue
 		}
 
-		if collectionType, exists := vertexIDs[vertex.ID]; exists {
+		if prevIndex, exists := vertexIDs[vertex.ID]; exists {
 			errors.AddError(
 				ErrorTypeConstraint,
 				"Region",
 				"Vertices",
-				fmt.Sprintf("duplicate vertex ID '%s' found in %s collection and vertices collection at index %d (structural integrity violation)", vertex.ID, collectionType, i),
+				fmt.Sprintf("duplicate vertex ID '%s' found at indices %d and %d in vertices collection (structural integrity violation)", vertex.ID, prevIndex, i),
 				context.WithPathIndex("Vertices", i).Path,
 			)
 		} else {
-			vertexIDs[vertex.ID] = "vertices"
+			vertexIDs[vertex.ID] = i
 		}
 	}
 
-	// Check states collection
+	// Check for duplicates within states collection
+	stateIDs := make(map[string]int)
 	for i, state := range r.States {
 		if state == nil {
 			continue
 		}
 
-		if collectionType, exists := vertexIDs[state.ID]; exists {
+		if prevIndex, exists := stateIDs[state.ID]; exists {
 			errors.AddError(
 				ErrorTypeConstraint,
 				"Region",
 				"States",
-				fmt.Sprintf("duplicate vertex ID '%s' found in %s collection and states collection at index %d (structural integrity violation)", state.ID, collectionType, i),
+				fmt.Sprintf("duplicate state ID '%s' found at indices %d and %d in states collection (structural integrity violation)", state.ID, prevIndex, i),
 				context.WithPathIndex("States", i).Path,
 			)
 		} else {
-			vertexIDs[state.ID] = "states"
+			stateIDs[state.ID] = i
 		}
 	}
 }
