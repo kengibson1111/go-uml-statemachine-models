@@ -48,7 +48,7 @@ func TestEvent_Validate(t *testing.T) {
 				Type: EventTypeSignal,
 			},
 			wantErr: true,
-			errMsg:  "Event ID cannot be empty",
+			errMsg:  "[Required] Event.ID: field is required and cannot be empty",
 		},
 		{
 			name: "empty Name",
@@ -57,7 +57,7 @@ func TestEvent_Validate(t *testing.T) {
 				Type: EventTypeSignal,
 			},
 			wantErr: true,
-			errMsg:  "Event Name cannot be empty",
+			errMsg:  "[Required] Event.Name: field is required and cannot be empty",
 		},
 		{
 			name: "invalid Type",
@@ -67,7 +67,7 @@ func TestEvent_Validate(t *testing.T) {
 				Type: EventType("invalid"),
 			},
 			wantErr: true,
-			errMsg:  "invalid EventType: invalid",
+			errMsg:  "[Invalid] Event.Type: invalid EventType: invalid",
 		},
 	}
 
@@ -120,7 +120,7 @@ func TestTrigger_Validate(t *testing.T) {
 				Event: validEvent,
 			},
 			wantErr: true,
-			errMsg:  "Trigger ID cannot be empty",
+			errMsg:  "[Required] Trigger.ID: field is required and cannot be empty",
 		},
 		{
 			name: "empty Name",
@@ -129,7 +129,7 @@ func TestTrigger_Validate(t *testing.T) {
 				Event: validEvent,
 			},
 			wantErr: true,
-			errMsg:  "Trigger Name cannot be empty",
+			errMsg:  "[Required] Trigger.Name: field is required and cannot be empty",
 		},
 		{
 			name: "nil Event",
@@ -138,7 +138,7 @@ func TestTrigger_Validate(t *testing.T) {
 				Name: "TestTrigger",
 			},
 			wantErr: true,
-			errMsg:  "Trigger Event cannot be nil",
+			errMsg:  "[Required] Trigger.Event: required reference cannot be nil",
 		},
 		{
 			name: "invalid Event",
@@ -150,7 +150,7 @@ func TestTrigger_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid event: Event ID cannot be empty",
+			errMsg:  "multiple validation errors:\n  - [Required] Event.ID: field is required and cannot be empty at Event\n  - [Required] Event.Name: field is required and cannot be empty at Event\n  - [Invalid] Event.Type: invalid EventType:  at Event",
 		},
 	}
 

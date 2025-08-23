@@ -222,18 +222,20 @@ func (ve *ValidationErrors) GetDetailedReport() string {
 
 // ValidationContext provides context for validation operations
 type ValidationContext struct {
-	StateMachine *StateMachine          `json:"state_machine,omitempty"`
-	Region       *Region                `json:"region,omitempty"`
-	Parent       interface{}            `json:"-"` // Parent object (not serialized due to potential cycles)
-	Path         []string               `json:"path"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	StateMachine   *StateMachine          `json:"state_machine,omitempty"`
+	Region         *Region                `json:"region,omitempty"`
+	Parent         interface{}            `json:"-"` // Parent object (not serialized due to potential cycles)
+	Path           []string               `json:"path"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	VisitedObjects map[uintptr]bool       `json:"-"` // Track visited objects to prevent infinite recursion
 }
 
 // NewValidationContext creates a new validation context
 func NewValidationContext() *ValidationContext {
 	return &ValidationContext{
-		Path:     make([]string, 0),
-		Metadata: make(map[string]interface{}),
+		Path:           make([]string, 0),
+		Metadata:       make(map[string]interface{}),
+		VisitedObjects: make(map[uintptr]bool),
 	}
 }
 

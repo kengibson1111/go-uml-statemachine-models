@@ -24,11 +24,15 @@ type ValidatorWithErrors interface {
 }
 
 // ValidationHelper provides utility functions for common validation patterns
-type ValidationHelper struct{}
+type ValidationHelper struct {
+	visited map[interface{}]bool // Track visited objects to prevent infinite recursion
+}
 
 // NewValidationHelper creates a new validation helper
 func NewValidationHelper() *ValidationHelper {
-	return &ValidationHelper{}
+	return &ValidationHelper{
+		visited: make(map[interface{}]bool),
+	}
 }
 
 // ValidateRequired checks if a required field is present and non-empty
@@ -77,7 +81,7 @@ func (vh *ValidationHelper) ValidateEnum(value, fieldName, objectName string, al
 // ValidateCollection validates a collection of validators
 func (vh *ValidationHelper) ValidateCollection(validators []Validator, collectionName, objectName string, context *ValidationContext, errors *ValidationErrors) {
 	for i, validator := range validators {
-		if validator == nil {
+		if validator == nil || isNilInterface(validator) {
 			errors.AddError(
 				ErrorTypeReference,
 				objectName,
@@ -149,6 +153,19 @@ func (vh *ValidationHelper) ValidateReference(validator Validator, fieldName, ob
 		}
 		return
 	}
+
+	// Check for circular references to prevent infinite recursion
+	if vh.visited[validator] {
+		// Already validating this object, skip to prevent infinite loop
+		return
+	}
+
+	// Mark this object as being visited
+	vh.visited[validator] = true
+	defer func() {
+		// Clean up after validation to allow re-validation in different contexts
+		delete(vh.visited, validator)
+	}()
 
 	// Create a new context for the referenced object
 	refContext := context.WithPath(fieldName)

@@ -794,7 +794,7 @@ func (rv *ReferenceValidator) validateContainmentCycle(parentID, childID string,
 	visited := make(map[string]bool)
 	path := []string{parentID}
 
-	if rv.hasContainmentCycle(childID, parentID, visited, path) {
+	if rv.hasContainmentCycleWithDepthLimit(childID, parentID, visited, path, 0, 100) {
 		rv.errors.AddError(
 			ErrorTypeConstraint,
 			"ContainmentHierarchy",
@@ -822,7 +822,7 @@ func (rv *ReferenceValidator) validateInheritanceCycle(childID, parentID string,
 	visited := make(map[string]bool)
 	path := []string{childID}
 
-	if rv.hasInheritanceCycle(parentID, childID, visited, path) {
+	if rv.hasInheritanceCycleWithDepthLimit(parentID, childID, visited, path, 0, 100) {
 		rv.errors.AddError(
 			ErrorTypeConstraint,
 			"InheritanceHierarchy",
@@ -835,6 +835,16 @@ func (rv *ReferenceValidator) validateInheritanceCycle(childID, parentID string,
 
 // hasContainmentCycle recursively checks for containment cycles
 func (rv *ReferenceValidator) hasContainmentCycle(currentID, targetID string, visited map[string]bool, path []string) bool {
+	return rv.hasContainmentCycleWithDepthLimit(currentID, targetID, visited, path, 0, 100)
+}
+
+// hasContainmentCycleWithDepthLimit recursively checks for containment cycles with depth limit
+func (rv *ReferenceValidator) hasContainmentCycleWithDepthLimit(currentID, targetID string, visited map[string]bool, path []string, depth, maxDepth int) bool {
+	if depth > maxDepth {
+		// Prevent infinite recursion by limiting depth
+		return false
+	}
+
 	if currentID == targetID {
 		return true
 	}
@@ -844,21 +854,36 @@ func (rv *ReferenceValidator) hasContainmentCycle(currentID, targetID string, vi
 	}
 
 	visited[currentID] = true
-	path = append(path, currentID)
+	// Create a new path slice to avoid modifying the original
+	newPath := make([]string, len(path), len(path)+1)
+	copy(newPath, path)
+	newPath = append(newPath, currentID)
 
 	if children, exists := rv.containmentTree[currentID]; exists {
 		for _, childID := range children {
-			if rv.hasContainmentCycle(childID, targetID, visited, path) {
+			if rv.hasContainmentCycleWithDepthLimit(childID, targetID, visited, newPath, depth+1, maxDepth) {
 				return true
 			}
 		}
 	}
 
+	// Clean up visited state for this branch
+	visited[currentID] = false
 	return false
 }
 
 // hasInheritanceCycle recursively checks for inheritance cycles
 func (rv *ReferenceValidator) hasInheritanceCycle(currentID, targetID string, visited map[string]bool, path []string) bool {
+	return rv.hasInheritanceCycleWithDepthLimit(currentID, targetID, visited, path, 0, 100)
+}
+
+// hasInheritanceCycleWithDepthLimit recursively checks for inheritance cycles with depth limit
+func (rv *ReferenceValidator) hasInheritanceCycleWithDepthLimit(currentID, targetID string, visited map[string]bool, path []string, depth, maxDepth int) bool {
+	if depth > maxDepth {
+		// Prevent infinite recursion by limiting depth
+		return false
+	}
+
 	if currentID == targetID {
 		return true
 	}
@@ -868,14 +893,19 @@ func (rv *ReferenceValidator) hasInheritanceCycle(currentID, targetID string, vi
 	}
 
 	visited[currentID] = true
-	path = append(path, currentID)
+	// Create a new path slice to avoid modifying the original
+	newPath := make([]string, len(path), len(path)+1)
+	copy(newPath, path)
+	newPath = append(newPath, currentID)
 
 	if parentID, exists := rv.inheritanceTree[currentID]; exists {
-		if rv.hasInheritanceCycle(parentID, targetID, visited, path) {
+		if rv.hasInheritanceCycleWithDepthLimit(parentID, targetID, visited, newPath, depth+1, maxDepth) {
 			return true
 		}
 	}
 
+	// Clean up visited state for this branch
+	visited[currentID] = false
 	return false
 }
 
