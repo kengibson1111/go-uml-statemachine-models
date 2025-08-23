@@ -34,7 +34,7 @@ func TestConstraint_Validate(t *testing.T) {
 				Specification: "x > 0",
 			},
 			wantErr: true,
-			errMsg:  "Constraint ID cannot be empty",
+			errMsg:  "[Required] Constraint.ID: field is required and cannot be empty",
 		},
 		{
 			name: "empty Specification",
@@ -43,7 +43,7 @@ func TestConstraint_Validate(t *testing.T) {
 				Name: "TestConstraint",
 			},
 			wantErr: true,
-			errMsg:  "Constraint Specification cannot be empty",
+			errMsg:  "[Required] Constraint.Specification: field is required and cannot be empty",
 		},
 	}
 
@@ -99,7 +99,7 @@ func TestBehavior_Validate(t *testing.T) {
 				Specification: "doSomething()",
 			},
 			wantErr: true,
-			errMsg:  "Behavior ID cannot be empty",
+			errMsg:  "[Required] Behavior.ID: field is required and cannot be empty",
 		},
 		{
 			name: "empty Specification",
@@ -108,7 +108,7 @@ func TestBehavior_Validate(t *testing.T) {
 				Name: "TestBehavior",
 			},
 			wantErr: true,
-			errMsg:  "Behavior Specification cannot be empty",
+			errMsg:  "[Required] Behavior.Specification: field is required and cannot be empty",
 		},
 	}
 

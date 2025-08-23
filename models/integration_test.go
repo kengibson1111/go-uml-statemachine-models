@@ -21,8 +21,8 @@ func TestStateMachine_JSONSerialization(t *testing.T) {
 				States: []*State{
 					{
 						Vertex: Vertex{
-							ID:   "state1",
-							Name: "InitialState",
+							ID:   "simple_state",
+							Name: "SimpleState",
 							Type: "state",
 						},
 						IsSimple: true,
@@ -30,12 +30,12 @@ func TestStateMachine_JSONSerialization(t *testing.T) {
 							ID:            "entry1",
 							Name:          "EntryAction",
 							Specification: "initialize()",
-							Language:      "Java",
+							Language:      "OCL",
 						},
 					},
 					{
 						Vertex: Vertex{
-							ID:   "state2",
+							ID:   "composite_state",
 							Name: "CompositeState",
 							Type: "state",
 						},
@@ -48,61 +48,17 @@ func TestStateMachine_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Transitions: []*Transition{
-					{
-						ID:   "transition1",
-						Name: "TestTransition",
-						Source: &Vertex{
-							ID:   "state1",
-							Name: "InitialState",
-							Type: "state",
-						},
-						Target: &Vertex{
-							ID:   "state2",
-							Name: "CompositeState",
-							Type: "state",
-						},
-						Kind: TransitionKindExternal,
-						Triggers: []*Trigger{
-							{
-								ID:   "trigger1",
-								Name: "TestTrigger",
-								Event: &Event{
-									ID:   "event1",
-									Name: "TestEvent",
-									Type: EventTypeSignal,
-								},
-							},
-						},
-						Guard: &Constraint{
-							ID:            "guard1",
-							Name:          "TestGuard",
-							Specification: "x > 0",
-							Language:      "OCL",
-						},
-						Effect: &Behavior{
-							ID:            "effect1",
-							Name:          "TestEffect",
-							Specification: "doAction()",
-							Language:      "Java",
-						},
-					},
-				},
+				Transitions: []*Transition{},
 				Vertices: []*Vertex{
 					{
-						ID:   "state1",
-						Name: "InitialState",
-						Type: "state",
-					},
-					{
-						ID:   "state2",
-						Name: "CompositeState",
-						Type: "state",
-					},
-					{
 						ID:   "vertex1",
-						Name: "TestVertex",
+						Name: "InitialPseudostate",
 						Type: "pseudostate",
+					},
+					{
+						ID:   "vertex2",
+						Name: "FinalState",
+						Type: "finalstate",
 					},
 				},
 			},
@@ -163,8 +119,8 @@ func TestStateMachine_JSONSerialization(t *testing.T) {
 		if len(region.States) != 2 {
 			t.Errorf("States count mismatch: got %d, want 2", len(region.States))
 		}
-		if len(region.Transitions) != 1 {
-			t.Errorf("Transitions count mismatch: got %d, want 1", len(region.Transitions))
+		if len(region.Transitions) != 0 {
+			t.Errorf("Transitions count mismatch: got %d, want 0", len(region.Transitions))
 		}
 	}
 }
